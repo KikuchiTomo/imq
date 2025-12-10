@@ -42,10 +42,10 @@
         </header>
 
         <nav class="flex gap-6 border-b border-[rgba(255,255,255,0.08)] pb-2 text-slate-200 text-sm font-semibold">
-            <a href="/" class="#if(title == \"Dashboard\") { nav-link-active } else { text-slate-400 hover:text-slate-200 }">
+            <a href="/" class="#if(title == "Dashboard"):nav-link-active#else:text-slate-400 hover:text-slate-200#endif">
                 Dashboard
             </a>
-            <a href="/settings" class="#if(title == \"Settings\") { nav-link-active } else { text-slate-400 hover:text-slate-200 }">
+            <a href="/settings" class="#if(title == "Settings"):nav-link-active#else:text-slate-400 hover:text-slate-200#endif">
                 Settings
             </a>
         </nav>
