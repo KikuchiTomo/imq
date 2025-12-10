@@ -9,6 +9,18 @@ final class SQLiteConfigurationRepository: ConfigurationRepository {
     private let database: SQLiteConnectionManager
     private let logger: Logger
 
+    // MARK: - Table and Column Definitions
+
+    private let configurationsTable = Table("configurations")
+    private let idColumn = Expression<Int64>("id")
+    private let triggerLabelColumn = Expression<String>("trigger_label")
+    private let githubModeColumn = Expression<String>("github_mode")
+    private let pollingIntervalColumn = Expression<Double>("polling_interval")
+    private let webhookSecretColumn = Expression<String?>("webhook_secret")
+    private let checkConfigurationsColumn = Expression<String>("check_configurations")
+    private let notificationTemplatesColumn = Expression<String>("notification_templates")
+    private let updatedAtColumn = Expression<Double>("updated_at")
+
     /// Initialize the repository with database connection manager
     /// - Parameters:
     ///   - database: SQLite connection manager for database operations
@@ -27,7 +39,8 @@ final class SQLiteConfigurationRepository: ConfigurationRepository {
         try await database.withConnection { connection in
             let query = "SELECT * FROM configurations WHERE id = 1 LIMIT 1"
 
-            guard let row = try connection.prepare(query).makeIterator().next() else {
+            let rowIterator = try connection.prepareRowIterator(query)
+            guard let row = try rowIterator.failableNext() else {
                 throw DatabaseError.notFound(
                     entityType: "SystemConfiguration",
                     id: "1"
@@ -81,14 +94,14 @@ final class SQLiteConfigurationRepository: ConfigurationRepository {
     /// - Returns: SystemConfiguration entity
     /// - Throws: Error if mapping fails
     private func mapRowToConfiguration(_ row: Row) throws -> SystemConfiguration {
-        let id = Int(row[0] as! Int64)
-        let triggerLabel = row[1] as! String
-        let githubModeRaw = row[2] as! String
-        let pollingInterval = row[3] as! Double
-        let webhookSecret = row[4] as? String
-        let checkConfigurations = row[5] as! String
-        let notificationTemplates = row[6] as! String
-        let updatedAtTimestamp = row[7] as! Double
+        let id = Int(try row.get(idColumn))
+        let triggerLabel = try row.get(triggerLabelColumn)
+        let githubModeRaw = try row.get(githubModeColumn)
+        let pollingInterval = try row.get(pollingIntervalColumn)
+        let webhookSecret = try row.get(webhookSecretColumn)
+        let checkConfigurations = try row.get(checkConfigurationsColumn)
+        let notificationTemplates = try row.get(notificationTemplatesColumn)
+        let updatedAtTimestamp = try row.get(updatedAtColumn)
         let updatedAt = Date(timeIntervalSince1970: updatedAtTimestamp)
 
         guard let githubMode = GitHubIntegrationMode(rawValue: githubModeRaw) else {

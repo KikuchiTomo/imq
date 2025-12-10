@@ -58,7 +58,8 @@ final class SQLiteQueueRepository: QueueRepository {
             let query = "SELECT * FROM queues ORDER BY created_at ASC"
             var queues: [Queue] = []
 
-            for row in try connection.prepare(query) {
+            let rowIterator = try connection.prepareRowIterator(query)
+            while let row = try rowIterator.failableNext() {
                 let queue = try await self.mapRowToQueue(row, connection: connection)
                 queues.append(queue)
             }
@@ -81,10 +82,8 @@ final class SQLiteQueueRepository: QueueRepository {
             LIMIT 1
             """
 
-            guard let row = try connection.prepare(query)
-                .bind(repository.value, baseBranch.value)
-                .makeIterator()
-                .next() else {
+            let rowIterator = try connection.prepareRowIterator(query, bindings: repository.value, baseBranch.value)
+            guard let row = try rowIterator.failableNext() else {
                 return nil
             }
 
@@ -264,7 +263,8 @@ final class SQLiteQueueRepository: QueueRepository {
 
         var entries: [QueueEntry] = []
 
-        for row in try connection.prepare(query).bind(queueId.value) {
+        let rowIterator = try connection.prepareRowIterator(query, bindings: queueId.value)
+        while let row = try rowIterator.failableNext() {
             let entry = try await mapRowToQueueEntry(row)
             entries.append(entry)
         }
@@ -329,7 +329,8 @@ final class SQLiteQueueRepository: QueueRepository {
         let existingIdsQuery = "SELECT id FROM queue_entries WHERE queue_id = ?"
         var existingIds = Set<String>()
 
-        for row in try connection.prepare(existingIdsQuery).bind(queueId.value) {
+        let rowIterator = try connection.prepareRowIterator(existingIdsQuery, bindings: queueId.value)
+        while let row = try rowIterator.failableNext() {
             let idValue = try row.get(Expression<String>("id"))
             existingIds.insert(idValue)
         }

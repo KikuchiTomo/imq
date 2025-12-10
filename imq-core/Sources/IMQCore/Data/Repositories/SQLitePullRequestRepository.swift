@@ -50,7 +50,8 @@ final class SQLitePullRequestRepository: PullRequestRepository {
         try await database.withConnection { connection in
             let query = "SELECT * FROM pull_requests WHERE id = ? LIMIT 1"
 
-            guard let row = try connection.prepare(query).bind(id.value).makeIterator().next() else {
+            let rowIterator = try connection.prepareRowIterator(query, bindings: id.value)
+            guard let row = try rowIterator.failableNext() else {
                 return nil
             }
 
@@ -72,10 +73,8 @@ final class SQLitePullRequestRepository: PullRequestRepository {
             LIMIT 1
             """
 
-            guard let row = try connection.prepare(query)
-                .bind(repository.value, Int64(number))
-                .makeIterator()
-                .next() else {
+            let rowIterator = try connection.prepareRowIterator(query, bindings: repository.value, Int64(number))
+            guard let row = try rowIterator.failableNext() else {
                 return nil
             }
 

@@ -37,7 +37,8 @@ final class SQLiteRepositoryRepository: RepositoryRepository {
         try await database.withConnection { connection in
             let query = "SELECT * FROM repositories WHERE id = ? LIMIT 1"
 
-            guard let row = try connection.prepare(query).bind(id.value).makeIterator().next() else {
+            let rowIterator = try connection.prepareRowIterator(query, bindings: id.value)
+            guard let row = try rowIterator.failableNext() else {
                 return nil
             }
 
@@ -53,7 +54,8 @@ final class SQLiteRepositoryRepository: RepositoryRepository {
         try await database.withConnection { connection in
             let query = "SELECT * FROM repositories WHERE full_name = ? LIMIT 1"
 
-            guard let row = try connection.prepare(query).bind(fullName).makeIterator().next() else {
+            let rowIterator = try connection.prepareRowIterator(query, bindings: fullName)
+            guard let row = try rowIterator.failableNext() else {
                 return nil
             }
 
