@@ -8,6 +8,16 @@ final class SQLiteRepositoryRepository: RepositoryRepository {
     private let database: SQLiteConnectionManager
     private let logger: Logger
 
+    // MARK: - Table and Column Definitions
+
+    private let repositoriesTable = Table("repositories")
+    private let idColumn = Expression<String>("id")
+    private let ownerColumn = Expression<String>("owner")
+    private let nameColumn = Expression<String>("name")
+    private let fullNameColumn = Expression<String>("full_name")
+    private let defaultBranchColumn = Expression<String>("default_branch")
+    private let createdAtColumn = Expression<Double>("created_at")
+
     /// Initialize the repository with database connection manager
     /// - Parameters:
     ///   - database: SQLite connection manager for database operations
@@ -129,12 +139,12 @@ final class SQLiteRepositoryRepository: RepositoryRepository {
     /// - Returns: Repository entity
     /// - Throws: Error if mapping fails
     private func mapRowToRepository(_ row: Row) throws -> Repository {
-        let id = RepositoryID(row[0] as! String)
-        let owner = row[1] as! String
-        let name = row[2] as! String
-        let fullName = row[3] as! String
-        let defaultBranch = BranchName(row[4] as! String)
-        let createdAtTimestamp = row[5] as! Double
+        let id = RepositoryID(try row.get(idColumn))
+        let owner = try row.get(ownerColumn)
+        let name = try row.get(nameColumn)
+        let fullName = try row.get(fullNameColumn)
+        let defaultBranch = BranchName(try row.get(defaultBranchColumn))
+        let createdAtTimestamp = try row.get(createdAtColumn)
         let createdAt = Date(timeIntervalSince1970: createdAtTimestamp)
 
         return Repository(

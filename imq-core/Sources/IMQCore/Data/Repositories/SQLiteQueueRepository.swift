@@ -10,6 +10,26 @@ final class SQLiteQueueRepository: QueueRepository {
     private let pullRequestRepository: PullRequestRepository
     private let logger: Logger
 
+    // MARK: - Table and Column Definitions
+
+    // Queues table
+    private let queuesTable = Table("queues")
+    private let queueIdColumn = Expression<String>("id")
+    private let queueRepositoryIdColumn = Expression<String>("repository_id")
+    private let queueBaseBranchColumn = Expression<String>("base_branch")
+    private let queueCreatedAtColumn = Expression<Double>("created_at")
+
+    // Queue entries table
+    private let queueEntriesTable = Table("queue_entries")
+    private let entryIdColumn = Expression<String>("id")
+    private let entryQueueIdColumn = Expression<String>("queue_id")
+    private let entryPullRequestIdColumn = Expression<String>("pull_request_id")
+    private let entryPositionColumn = Expression<Int64>("position")
+    private let entryStatusColumn = Expression<String>("status")
+    private let entryEnqueuedAtColumn = Expression<Double>("enqueued_at")
+    private let entryStartedAtColumn = Expression<Double?>("started_at")
+    private let entryCompletedAtColumn = Expression<Double?>("completed_at")
+
     /// Initialize the repository with database connection manager
     /// - Parameters:
     ///   - database: SQLite connection manager for database operations
@@ -203,10 +223,10 @@ final class SQLiteQueueRepository: QueueRepository {
     /// - Returns: Queue entity with loaded entries
     /// - Throws: Error if mapping fails or repository not found
     private func mapRowToQueue(_ row: Row, connection: Connection) async throws -> Queue {
-        let id = QueueID(row[0] as! String)
-        let repositoryId = RepositoryID(row[1] as! String)
-        let baseBranch = BranchName(row[2] as! String)
-        let createdAtTimestamp = row[3] as! Double
+        let id = QueueID(try row.get(queueIdColumn))
+        let repositoryId = RepositoryID(try row.get(queueRepositoryIdColumn))
+        let baseBranch = BranchName(try row.get(queueBaseBranchColumn))
+        let createdAtTimestamp = try row.get(queueCreatedAtColumn)
         let createdAt = Date(timeIntervalSince1970: createdAtTimestamp)
 
         // Load associated repository
@@ -257,14 +277,14 @@ final class SQLiteQueueRepository: QueueRepository {
     /// - Returns: QueueEntry entity
     /// - Throws: Error if mapping fails or pull request not found
     private func mapRowToQueueEntry(_ row: Row) async throws -> QueueEntry {
-        let id = QueueEntryID(row[0] as! String)
-        let queueId = QueueID(row[1] as! String)
-        let pullRequestId = PullRequestID(row[2] as! String)
-        let position = Int(row[3] as! Int64)
-        let statusRaw = row[4] as! String
-        let enqueuedAtTimestamp = row[5] as! Double
-        let startedAtTimestamp = row[6] as? Double
-        let completedAtTimestamp = row[7] as? Double
+        let id = QueueEntryID(try row.get(entryIdColumn))
+        let queueId = QueueID(try row.get(entryQueueIdColumn))
+        let pullRequestId = PullRequestID(try row.get(entryPullRequestIdColumn))
+        let position = Int(try row.get(entryPositionColumn))
+        let statusRaw = try row.get(entryStatusColumn)
+        let enqueuedAtTimestamp = try row.get(entryEnqueuedAtColumn)
+        let startedAtTimestamp = try row.get(entryStartedAtColumn)
+        let completedAtTimestamp = try row.get(entryCompletedAtColumn)
 
         guard let status = QueueEntryStatus(rawValue: statusRaw) else {
             throw DatabaseError.invalidQuery("Invalid queue entry status: \(statusRaw)")
@@ -310,7 +330,8 @@ final class SQLiteQueueRepository: QueueRepository {
         var existingIds = Set<String>()
 
         for row in try connection.prepare(existingIdsQuery).bind(queueId.value) {
-            existingIds.insert(row[0] as! String)
+            let idValue = try row.get(Expression<String>("id"))
+            existingIds.insert(idValue)
         }
 
         let currentIds = Set(entries.map { $0.id.value })

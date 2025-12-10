@@ -9,6 +9,22 @@ final class SQLitePullRequestRepository: PullRequestRepository {
     private let repositoryRepository: RepositoryRepository
     private let logger: Logger
 
+    // MARK: - Table and Column Definitions
+
+    private let pullRequestsTable = Table("pull_requests")
+    private let idColumn = Expression<String>("id")
+    private let repositoryIdColumn = Expression<String>("repository_id")
+    private let numberColumn = Expression<Int64>("number")
+    private let titleColumn = Expression<String>("title")
+    private let authorLoginColumn = Expression<String>("author_login")
+    private let baseBranchColumn = Expression<String>("base_branch")
+    private let headBranchColumn = Expression<String>("head_branch")
+    private let headSHAColumn = Expression<String>("head_sha")
+    private let isConflictedColumn = Expression<Int64>("is_conflicted")
+    private let isUpToDateColumn = Expression<Int64>("is_up_to_date")
+    private let createdAtColumn = Expression<Double>("created_at")
+    private let updatedAtColumn = Expression<Double>("updated_at")
+
     /// Initialize the repository with database connection manager
     /// - Parameters:
     ///   - database: SQLite connection manager for database operations
@@ -168,18 +184,18 @@ final class SQLitePullRequestRepository: PullRequestRepository {
     /// - Returns: PullRequest entity
     /// - Throws: Error if mapping fails or repository not found
     private func mapRowToPullRequest(_ row: Row) async throws -> PullRequest {
-        let id = PullRequestID(row[0] as! String)
-        let repositoryId = RepositoryID(row[1] as! String)
-        let number = Int(row[2] as! Int64)
-        let title = row[3] as! String
-        let authorLogin = row[4] as! String
-        let baseBranch = BranchName(row[5] as! String)
-        let headBranch = BranchName(row[6] as! String)
-        let headSHA = CommitSHA(row[7] as! String)
-        let isConflicted = (row[8] as! Int64) != 0
-        let isUpToDate = (row[9] as! Int64) != 0
-        let createdAtTimestamp = row[10] as! Double
-        let updatedAtTimestamp = row[11] as! Double
+        let id = PullRequestID(try row.get(idColumn))
+        let repositoryId = RepositoryID(try row.get(repositoryIdColumn))
+        let number = Int(try row.get(numberColumn))
+        let title = try row.get(titleColumn)
+        let authorLogin = try row.get(authorLoginColumn)
+        let baseBranch = BranchName(try row.get(baseBranchColumn))
+        let headBranch = BranchName(try row.get(headBranchColumn))
+        let headSHA = CommitSHA(try row.get(headSHAColumn))
+        let isConflicted = (try row.get(isConflictedColumn)) != 0
+        let isUpToDate = (try row.get(isUpToDateColumn)) != 0
+        let createdAtTimestamp = try row.get(createdAtColumn)
+        let updatedAtTimestamp = try row.get(updatedAtColumn)
         let createdAt = Date(timeIntervalSince1970: createdAtTimestamp)
         let updatedAt = Date(timeIntervalSince1970: updatedAtTimestamp)
 

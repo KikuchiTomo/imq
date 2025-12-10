@@ -205,8 +205,8 @@ actor GitHubAPIClient: Sendable {
         updateRateLimit(from: response.headers)
 
         // Handle response status
-        guard let status = response.status.code, (200...299).contains(status) else {
-            let statusCode = response.status.code ?? 0
+        let statusCode = Int(response.status.code)
+        guard (200...299).contains(statusCode) else {
             let body = try await response.body.collect(upTo: 1024 * 1024) // 1MB limit
             let errorMessage = String(buffer: body)
 
@@ -223,7 +223,7 @@ actor GitHubAPIClient: Sendable {
         }
 
         // Handle 304 Not Modified (ETag match)
-        if response.status.code == 304 {
+        if statusCode == 304 {
             return Data()
         }
 
