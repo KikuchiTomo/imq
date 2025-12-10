@@ -4,12 +4,12 @@
 function createConfigEditor(configStore) {
     return {
         store: configStore,
+        saving: false,
+        error: null,
+        message: null,
 
-        get config() { return this.store.config; },
-        get loading() { return this.store.loading; },
-        get saving() { return this.store.saving; },
-        get error() { return this.store.error; },
-        get message() { return this.store.message; },
+        get config() { return this.store.config || {}; },
+        get loading() { return this.store.loading || false; },
 
         async init() {
             await this.store.init();
@@ -70,12 +70,31 @@ function createConfigEditor(configStore) {
         },
 
         async save() {
-            await this.store.save();
+            this.saving = true;
+            this.error = null;
+            this.message = null;
+            try {
+                await this.store.save();
+                this.message = 'Configuration updated successfully!';
+                setTimeout(() => { this.message = null; }, 3000);
+            } catch (err) {
+                this.error = err.message || 'Failed to save configuration';
+            } finally {
+                this.saving = false;
+            }
         },
 
         reset() {
             if (confirm('Are you sure you want to reset all settings to defaults?')) {
-                this.store.reset();
+                this.error = null;
+                this.message = null;
+                try {
+                    this.store.reset();
+                    this.message = 'Configuration reset to defaults';
+                    setTimeout(() => { this.message = null; }, 3000);
+                } catch (err) {
+                    this.error = err.message || 'Failed to reset configuration';
+                }
             }
         }
     };
