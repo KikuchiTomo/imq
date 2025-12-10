@@ -1,0 +1,134 @@
+#extend("layout"):
+    #export("content"):
+        <section class="space-y-6" x-data="dashboard">
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div class="flex items-center gap-3">
+                    <span class="badge" :class="{
+                        'success': $store.queues.connectionState === 'connected',
+                        'warning': $store.queues.connectionState === 'reconnecting',
+                        'error': $store.queues.connectionState === 'failed' || $store.queues.connectionState === 'disconnected'
+                    }" x-text="'WS: ' + ($store.queues.connectionState || 'idle')"></span>
+                    <span class="badge success" x-show="!$store.queues.loading">Live</span>
+                    <span class="badge warning" x-show="$store.queues.loading">Refreshing</span>
+                </div>
+                <div class="flex items-center gap-3 text-sm text-slate-200">
+                    <span class="text-slate-400">Last update:</span>
+                    <span x-text="$store.queues.lastUpdated ? new Date($store.queues.lastUpdated).toLocaleTimeString() : '–'"></span>
+                    <button class="btn-primary" @click="refresh()" :disabled="$store.queues.loading">
+                        Refresh
+                    </button>
+                </div>
+            </div>
+
+            <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <div class="glass-card p-4">
+                    <div class="stat-number" x-text="$store.queues.totalQueues"></div>
+                    <div class="stat-label">Queues</div>
+                </div>
+                <div class="glass-card p-4">
+                    <div class="stat-number" x-text="$store.queues.totalEntries"></div>
+                    <div class="stat-label">PRs tracked</div>
+                </div>
+                <div class="glass-card p-4">
+                    <div class="stat-number" x-text="queues.reduce((sum, q) => sum + (queueStats(q).ready || 0), 0)"></div>
+                    <div class="stat-label">Ready</div>
+                </div>
+                <div class="glass-card p-4">
+                    <div class="stat-number" x-text="queues.reduce((sum, q) => sum + (queueStats(q).checking || 0), 0)"></div>
+                    <div class="stat-label">Checking</div>
+                </div>
+            </div>
+
+            <div class="glass-card p-6 space-y-6">
+                <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                        <h2 class="text-xl font-bold text-white">Queues</h2>
+                        <p class="text-slate-400 text-sm mt-1">Merge queue status from core service</p>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <label class="text-sm text-slate-300 font-medium">Filter:</label>
+                        <select class="input w-40" x-model="filterStatus">
+                            <option value="all">All Statuses</option>
+                            <option value="pending">Pending</option>
+                            <option value="checking">Checking</option>
+                            <option value="ready">Ready</option>
+                        </select>
+                    </div>
+                </div>
+
+                <template x-if="$store.queues.error">
+                    <div class="border border-red-500/40 bg-red-500/10 text-red-200 px-4 py-3 rounded-lg">
+                        <p x-text="$store.queues.error"></p>
+                    </div>
+                </template>
+
+                <div class="grid gap-4 lg:grid-cols-2">
+                    <template x-for="queue in queues" :key="queue.id">
+                        <div class="glass-card p-5 hover:border-[rgba(148,163,184,0.25)] transition-all">
+                            <div class="flex items-start justify-between gap-3 mb-4">
+                                <div class="space-y-1.5">
+                                    <p class="text-xs text-slate-400 uppercase tracking-widest font-semibold" x-text="queue.repositoryID || 'repo'"></p>
+                                    <h3 class="text-xl font-bold text-white" x-text="queue.baseBranch || 'main'"></h3>
+                                    <p class="text-slate-400 text-xs">
+                                        Created <span x-text="queue.createdAt ? new Date(queue.createdAt).toLocaleDateString() : '—'"></span>
+                                    </p>
+                                </div>
+                                <div class="chip">
+                                    <span class="status-dot status-checking"></span>
+                                    <span x-text="(queue.entries || []).length + ' PRs'"></span>
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-3 gap-2 mt-4 text-sm text-slate-200">
+                                <div class="glass-card p-3">
+                                    <div class="text-lg font-semibold" x-text="queueStats(queue).ready"></div>
+                                    <div class="text-slate-400 text-xs">Ready</div>
+                                </div>
+                                <div class="glass-card p-3">
+                                    <div class="text-lg font-semibold" x-text="queueStats(queue).checking"></div>
+                                    <div class="text-slate-400 text-xs">Checking</div>
+                                </div>
+                                <div class="glass-card p-3">
+                                    <div class="text-lg font-semibold" x-text="queueStats(queue).pending"></div>
+                                    <div class="text-slate-400 text-xs">Pending</div>
+                                </div>
+                            </div>
+
+                            <div class="mt-4 space-y-2">
+                                <div class="text-sm text-slate-400">Entries</div>
+                                <div class="border border-[rgba(255,255,255,0.08)] rounded-xl divide-y divide-[rgba(255,255,255,0.06)]">
+                                    <template x-if="(queue.entries || []).length === 0">
+                                        <div class="px-3 py-2 text-sm text-slate-400">No entries yet.</div>
+                                    </template>
+                                    <template x-for="entry in queue.entries || []" :key="entry.id">
+                                        <div class="px-3 py-2 flex items-center justify-between gap-3">
+                                            <div>
+                                                <div class="text-sm text-white font-semibold" x-text="'#' + (entry.pullRequest?.number || '-') + ' · ' + (entry.pullRequest?.title || 'Pull request')"></div>
+                                                <div class="text-xs text-slate-400">
+                                                    <a :href="prLink(entry.pullRequest)" target="_blank" class="underline decoration-dotted">
+                                                        <span x-text="entry.pullRequest?.author || 'author'"></span>
+                                                    </a>
+                                                    ·
+                                                    <span x-text="entry.pullRequest?.headBranch || 'head'"></span>
+                                                    →
+                                                    <span x-text="entry.pullRequest?.baseBranch || queue.baseBranch || 'base'"></span>
+                                                </div>
+                                            </div>
+                                            <div class="flex items-center gap-2">
+                                                <span class="chip">
+                                                    <span class="status-dot" :class="statusColor(entry.status)"></span>
+                                                    <span class="uppercase tracking-wide text-xs" x-text="entry.status || 'pending'"></span>
+                                                </span>
+                                                <span class="text-xs text-slate-400" x-text="entry.position ? 'Pos ' + entry.position : ''"></span>
+                                            </div>
+                                        </div>
+                                    </template>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </section>
+    #endexport
+#endextend

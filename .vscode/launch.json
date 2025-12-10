@@ -1,0 +1,44 @@
+{
+    "configurations": [
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:imq}/imq-core",
+            "name": "Debug imq (imq-core)",
+            "target": "imq",
+            "configuration": "debug",
+            "preLaunchTask": "swift: Build Debug imq (imq-core)"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:imq}/imq-core",
+            "name": "Release imq (imq-core)",
+            "target": "imq",
+            "configuration": "release",
+            "preLaunchTask": "swift: Build Release imq (imq-core)"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:imq}/imq-core",
+            "name": "Debug imq-server (imq-core)",
+            "target": "imq-server",
+            "configuration": "debug",
+            "preLaunchTask": "swift: Build Debug imq-server (imq-core)"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:imq}/imq-core",
+            "name": "Release imq-server (imq-core)",
+            "target": "imq-server",
+            "configuration": "release",
+            "preLaunchTask": "swift: Build Release imq-server (imq-core)"
+        }
+    ]
+}
