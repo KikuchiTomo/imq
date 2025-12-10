@@ -2,7 +2,7 @@ import Foundation
 
 /// Application Configuration
 /// Loaded from environment variables and .env file
-struct ApplicationConfiguration {
+public struct ApplicationConfiguration {
     // GitHub
     let githubToken: String
     let githubAPIURL: String

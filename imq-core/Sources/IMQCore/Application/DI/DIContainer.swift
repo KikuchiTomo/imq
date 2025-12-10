@@ -5,7 +5,7 @@ import Logging
 /// Dependency Injection Container
 /// Manages the lifecycle and wiring of all application dependencies using the actor model
 /// for thread-safe lazy initialization
-actor DIContainer {
+public actor DIContainer {
     // MARK: - Configuration
 
     private let config: ApplicationConfiguration
@@ -205,11 +205,9 @@ actor DIContainer {
         }
 
         let gateway = try await githubGateway()
-        let prRepo = try await pullRequestRepository()
         let logger = self.logger(label: "pr-update")
         let useCase = PRUpdateUseCaseImpl(
             githubGateway: gateway,
-            pullRequestRepository: prRepo,
             logger: logger
         )
         _prUpdateUseCase = useCase
@@ -222,13 +220,9 @@ actor DIContainer {
         }
 
         let factory = try await checkExecutorFactory()
-        let cache = try await checkResultCache()
-        let semaphore = try await asyncSemaphore(permits: 5)
         let logger = self.logger(label: "check-execution")
         let useCase = CheckExecutionUseCaseImpl(
-            executorFactory: factory,
-            cache: cache,
-            semaphore: semaphore,
+            checkExecutorFactory: factory,
             logger: logger
         )
         _checkExecutionUseCase = useCase
@@ -241,11 +235,11 @@ actor DIContainer {
         }
 
         let gateway = try await githubGateway()
-        let prRepo = try await pullRequestRepository()
+        let queueRepo = try await queueRepository()
         let logger = self.logger(label: "merging")
         let useCase = MergingUseCaseImpl(
             githubGateway: gateway,
-            pullRequestRepository: prRepo,
+            queueRepository: queueRepo,
             logger: logger
         )
         _mergingUseCase = useCase
@@ -339,12 +333,8 @@ actor DIContainer {
             return existing
         }
 
-        let queueRepo = try await queueRepository()
         let logger = self.logger(label: "fair-queue-scheduler")
-        let scheduler = FairQueueScheduler(
-            queueRepository: queueRepo,
-            logger: logger
-        )
+        let scheduler = FairQueueScheduler(logger: logger)
         _fairQueueScheduler = scheduler
         return scheduler
     }
@@ -357,7 +347,6 @@ actor DIContainer {
         let queueRepo = try await queueRepository()
         let queueProcessing = try await queueProcessingUseCase()
         let scheduler = try await fairQueueScheduler()
-        let semaphore = try await asyncSemaphore(permits: 3)
         let metrics = try await queueMetrics()
         let retryPolicy = await self.retryPolicy()
         let logger = self.logger(label: "queue-processor")
