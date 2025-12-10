@@ -92,66 +92,95 @@ protocol GitHubGateway: Sendable {
 // MARK: - Response Types
 
 /// GitHub pull request response
-struct GitHubPullRequest: Sendable, Codable {
+public struct GitHubPullRequest: Sendable, Codable {
     /// Pull request ID
-    let id: Int
+    public let id: Int
 
     /// Pull request number
-    let number: Int
+    public let number: Int
 
     /// Pull request title
-    let title: String
+    public let title: String
 
     /// Pull request state (open, closed)
-    let state: String
+    public let state: String
 
     /// Whether the pull request can be merged (nil if still calculating)
-    let mergeable: Bool?
+    public let mergeable: Bool?
 
     /// Mergeable state (clean, dirty, unstable, etc.)
-    let mergeableState: String
+    public let mergeableState: String
 
     /// HEAD commit SHA
-    let headSHA: String
+    public let headSHA: String
 
     /// Base branch name
-    let baseBranch: String
+    public let baseBranch: String
 
     /// Head branch name
-    let headBranch: String
+    public let headBranch: String
+
+    public init(id: Int, number: Int, title: String, state: String, mergeable: Bool?, mergeableState: String, headSHA: String, baseBranch: String, headBranch: String) {
+        self.id = id
+        self.number = number
+        self.title = title
+        self.state = state
+        self.mergeable = mergeable
+        self.mergeableState = mergeableState
+        self.headSHA = headSHA
+        self.baseBranch = baseBranch
+        self.headBranch = headBranch
+    }
 }
 
 /// Branch update result
-struct BranchUpdateResult: Sendable, Codable {
+public struct BranchUpdateResult: Sendable, Codable {
     /// New HEAD commit SHA after update
-    let headSHA: String
+    public let headSHA: String
 
     /// Update status message
-    let message: String
+    public let message: String
+
+    public init(headSHA: String, message: String) {
+        self.headSHA = headSHA
+        self.message = message
+    }
 }
 
 /// Commit comparison result
-struct CommitComparison: Sendable, Codable {
+public struct CommitComparison: Sendable, Codable {
     /// Number of commits ahead
-    let aheadBy: Int
+    public let aheadBy: Int
 
     /// Number of commits behind
-    let behindBy: Int
+    public let behindBy: Int
 
     /// Comparison status (ahead, behind, identical, diverged)
-    let status: String
+    public let status: String
+
+    public init(aheadBy: Int, behindBy: Int, status: String) {
+        self.aheadBy = aheadBy
+        self.behindBy = behindBy
+        self.status = status
+    }
 }
 
 /// GitHub Actions workflow run
-struct WorkflowRun: Sendable, Codable {
+public struct WorkflowRun: Sendable, Codable {
     /// Workflow run ID
-    let id: Int
+    public let id: Int
 
     /// Workflow run status (queued, in_progress, completed)
-    let status: String
+    public let status: String
 
     /// Workflow run conclusion (success, failure, cancelled, timed_out, etc.)
-    let conclusion: String?
+    public let conclusion: String?
+
+    public init(id: Int, status: String, conclusion: String?) {
+        self.id = id
+        self.status = status
+        self.conclusion = conclusion
+    }
 }
 
 // MARK: - Error Types
