@@ -311,8 +311,8 @@ actor GitHubAPIClient: Sendable {
         return cappedDelay + jitter
     }
 
-    /// Convert our HTTPMethod enum to AsyncHTTPClient HTTPMethod
-    private func convertMethod(_ method: HTTPMethod) -> NIOHTTP1.HTTPMethod {
+    /// Convert our GitHubHTTPMethod enum to AsyncHTTPClient HTTPMethod
+    private func convertMethod(_ method: GitHubHTTPMethod) -> NIOHTTP1.HTTPMethod {
         switch method {
         case .get:
             return .GET

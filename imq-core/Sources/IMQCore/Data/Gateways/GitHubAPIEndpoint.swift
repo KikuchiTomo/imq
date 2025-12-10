@@ -1,8 +1,8 @@
 import Foundation
 import NIOHTTP1
 
-/// HTTP method for API requests
-enum HTTPMethod: String, Sendable {
+/// HTTP method for GitHub API requests
+enum GitHubHTTPMethod: String, Sendable {
     case get = "GET"
     case post = "POST"
     case put = "PUT"
@@ -90,7 +90,7 @@ enum GitHubAPIEndpoint: Sendable {
     }
 
     /// The HTTP method for the endpoint
-    var method: HTTPMethod {
+    var method: GitHubHTTPMethod {
         switch self {
         case .getPullRequest,
              .compareCommits,
