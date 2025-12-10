@@ -1,9 +1,11 @@
 #extend("layout"):
     #export("content"):
         <section class="space-y-6" x-data="configEditor" x-init="init()">
-            <div class="glass-card p-6 space-y-2">
-                <p class="text-sm uppercase tracking-[0.35em] text-sky-200">Runtime Settings</p>
-                <h2 class="text-2xl font-semibold text-white">Core Integration</h2>
+            <div class="glass-card p-6 space-y-3">
+                <div>
+                    <p class="text-xs uppercase tracking-widest text-cyan-400 font-semibold">Runtime Settings</p>
+                    <h2 class="text-2xl font-bold text-white mt-2">Core Integration</h2>
+                </div>
                 <p class="text-slate-300 text-sm">Update trigger label, GitHub integration mode, and polling cadence.</p>
             </div>
 
@@ -66,27 +68,41 @@
                     </div>
                 </div>
 
-                <div class="glass-card p-6 space-y-4">
-                    <h3 class="text-lg font-semibold text-white">Trigger Label Guide</h3>
-                    <ul class="space-y-3 text-sm text-slate-300 list-disc list-inside">
-                        <li>Apply the label to enqueue a PR automatically.</li>
-                        <li>Removing the label will drop the PR from the queue.</li>
-                        <li>Use branch-specific labels (e.g. <code>merge-main</code>) if needed.</li>
-                        <li>Webhook mode requires this label for validation.</li>
+                <div class="glass-card p-6 space-y-5">
+                    <h3 class="text-lg font-bold text-white">Trigger Label Guide</h3>
+                    <ul class="space-y-3 text-sm text-slate-300">
+                        <li class="flex items-start gap-2">
+                            <span class="text-cyan-400 mt-0.5">•</span>
+                            <span>Apply the label to enqueue a PR automatically.</span>
+                        </li>
+                        <li class="flex items-start gap-2">
+                            <span class="text-cyan-400 mt-0.5">•</span>
+                            <span>Removing the label will drop the PR from the queue.</span>
+                        </li>
+                        <li class="flex items-start gap-2">
+                            <span class="text-cyan-400 mt-0.5">•</span>
+                            <span>Use branch-specific labels (e.g. <code>merge-main</code>) if needed.</span>
+                        </li>
+                        <li class="flex items-start gap-2">
+                            <span class="text-cyan-400 mt-0.5">•</span>
+                            <span>Webhook mode requires this label for validation.</span>
+                        </li>
                     </ul>
-                    <div class="border border-[rgba(255,255,255,0.08)] rounded-xl p-4 space-y-2 text-xs text-slate-300">
-                        <p class="font-semibold text-white">Current config snapshot</p>
-                        <div class="flex items-center justify-between">
-                            <span>Mode</span>
-                            <span class="chip" x-text="store.config.githubMode || 'polling'"></span>
-                        </div>
-                        <div class="flex items-center justify-between">
-                            <span>Label</span>
-                            <span class="chip" x-text="store.config.triggerLabel"></span>
-                        </div>
-                        <div class="flex items-center justify-between">
-                            <span>Polling</span>
-                            <span class="chip" x-text="store.config.pollingInterval + 's'"></span>
+                    <div class="border border-[rgba(255,255,255,0.08)] rounded-xl p-4 space-y-3 bg-[rgba(255,255,255,0.02)]">
+                        <p class="font-semibold text-white text-sm">Current Configuration</p>
+                        <div class="space-y-2 text-xs">
+                            <div class="flex items-center justify-between py-2 border-b border-[rgba(255,255,255,0.06)]">
+                                <span class="text-slate-400">Mode</span>
+                                <span class="chip" x-text="store.config.githubMode || 'polling'"></span>
+                            </div>
+                            <div class="flex items-center justify-between py-2 border-b border-[rgba(255,255,255,0.06)]">
+                                <span class="text-slate-400">Label</span>
+                                <span class="chip" x-text="store.config.triggerLabel"></span>
+                            </div>
+                            <div class="flex items-center justify-between py-2">
+                                <span class="text-slate-400">Polling</span>
+                                <span class="chip" x-text="store.config.pollingInterval + 's'"></span>
+                            </div>
                         </div>
                     </div>
                 </div>
