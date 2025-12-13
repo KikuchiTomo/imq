@@ -1,4 +1,4 @@
-.PHONY: help setup install-swiftlint build test lint clean deps
+.PHONY: help setup install-swiftlint build build-release test lint clean deps
 
 # Detect OS
 UNAME_S := $(shell uname -s)
@@ -11,9 +11,11 @@ help:
 	@echo "  setup             - Install all dependencies (SwiftLint + Swift packages)"
 	@echo "  install-swiftlint - Install SwiftLint"
 	@echo "  deps              - Resolve Swift package dependencies"
-	@echo "  build             - Build the project"
+	@echo "  build             - Build the project (debug mode)"
+	@echo "  build-release     - Build the project (release mode, optimized)"
 	@echo "  test              - Run tests"
 	@echo "  lint              - Run SwiftLint"
+	@echo "  lint-strict       - Run SwiftLint in strict mode (warnings as errors)"
 	@echo "  clean             - Clean build artifacts"
 
 setup: install-swiftlint deps
@@ -57,11 +59,18 @@ deps:
 	@echo "✓ Dependencies resolved"
 
 build:
-	@echo "Building imq-core..."
+	@echo "Building imq-core (debug)..."
 	@cd imq-core && swift build
-	@echo "Building imq-gui..."
+	@echo "Building imq-gui (debug)..."
 	@cd imq-gui && swift build
 	@echo "✓ Build complete"
+
+build-release:
+	@echo "Building imq-core (release)..."
+	@cd imq-core && swift build -c release
+	@echo "Building imq-gui (release)..."
+	@cd imq-gui && swift build -c release
+	@echo "✓ Release build complete"
 
 test:
 	@echo "Running tests for imq-core..."
