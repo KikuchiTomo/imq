@@ -261,12 +261,31 @@ start_webhook_forward() {
         return
     fi
 
+    # Check if gh webhook extension is installed
+    if ! gh extension list 2>/dev/null | grep -q "cli/gh-webhook"; then
+        print_info "GitHub CLI webhook extension is not installed"
+        print_info "Installing webhook extension automatically..."
+
+        if gh extension install cli/gh-webhook 2>&1 | grep -v "^$"; then
+            print_success "GitHub CLI webhook extension installed successfully"
+        else
+            print_error "Failed to install webhook extension"
+            print_info "Please install it manually:"
+            echo ""
+            echo -e "  ${GREEN}gh extension install cli/gh-webhook${NC}"
+            echo ""
+            print_info "Or set IMQ_GITHUB_MODE=polling in .env for polling mode"
+            echo ""
+            return
+        fi
+    fi
+
     # Start webhook forwarder
     print_webhook "Starting webhook forwarder for ${IMQ_GITHUB_REPO}..."
 
     gh webhook forward \
-        --repo "$IMQ_GITHUB_REPO" \
-        --url "http://localhost:${IMQ_API_PORT:-8080}/webhook/github" \
+        --repo="$IMQ_GITHUB_REPO" \
+        --url="http://localhost:${IMQ_API_PORT:-8080}/webhook/github" \
         --events='*' 2>&1 | while IFS= read -r line; do
         print_webhook "$line"
     done &
@@ -277,8 +296,19 @@ start_webhook_forward() {
     sleep 2
     if ! kill -0 "$WEBHOOK_PID" 2>/dev/null; then
         print_error "Failed to start webhook forwarder"
-        print_info "Make sure you have access to repository: ${IMQ_GITHUB_REPO}"
-        print_info "Authenticate with: gh auth login"
+        print_info "Common issues:"
+        echo ""
+        echo -e "  ${YELLOW}1. Not authenticated:${NC}"
+        echo -e "     Run: ${GREEN}gh auth login${NC}"
+        echo ""
+        echo -e "  ${YELLOW}2. No repository access:${NC}"
+        echo -e "     Make sure you have admin access to ${IMQ_GITHUB_REPO}"
+        echo ""
+        echo -e "  ${YELLOW}3. Another user is already forwarding:${NC}"
+        echo -e "     Only one user can forward webhooks at a time"
+        echo ""
+        print_info "Alternatively, set IMQ_GITHUB_MODE=polling in .env"
+        echo ""
         WEBHOOK_PID=""
         return
     fi
