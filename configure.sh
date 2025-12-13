@@ -481,22 +481,21 @@ show_next_steps() {
 
     if [ "$BUILD_AFTER_CONFIG" = false ]; then
         echo "  1. Build the projects:"
-        echo "     ${GREEN}cd imq-core && swift build && cd ..${NC}"
-        echo "     ${GREEN}cd imq-gui && swift build && cd ..${NC}"
+        echo -e "     ${GREEN}make build${NC}"
         echo ""
     fi
 
     echo "  1. Start all services:"
-    echo "     ${GREEN}./run.sh${NC}"
+    echo -e "     ${GREEN}./run.sh${NC}"
     if [ "$GITHUB_MODE" = "webhook" ] && [ ! -z "$GITHUB_REPO" ]; then
         echo "     (This will automatically start webhook forwarding for ${GITHUB_REPO})"
     fi
     echo ""
     echo "  2. Or run as daemon:"
-    echo "     ${GREEN}./svc.sh start${NC}"
+    echo -e "     ${GREEN}./svc.sh start${NC}"
     echo ""
     echo "  3. Access the GUI:"
-    echo "     ${GREEN}http://localhost:${GUI_PORT}${NC}"
+    echo -e "     ${GREEN}http://localhost:${GUI_PORT}${NC}"
     echo ""
 
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
