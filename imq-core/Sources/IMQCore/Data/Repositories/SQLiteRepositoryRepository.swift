@@ -71,7 +71,7 @@ final class SQLiteRepositoryRepository: RepositoryRepository {
             // Check if repository exists
             let existsQuery = "SELECT COUNT(*) FROM repositories WHERE id = ?"
             guard let count = try connection.scalar(existsQuery, repository.id.value) as? Int64 else {
-                throw DatabaseError.queryFailed("Failed to check repository existence")
+                throw DatabaseError.invalidQuery("Failed to check repository existence")
             }
 
             if count > 0 {

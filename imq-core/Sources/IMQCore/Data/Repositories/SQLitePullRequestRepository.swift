@@ -90,7 +90,7 @@ final class SQLitePullRequestRepository: PullRequestRepository {
             // Check if pull request exists
             let existsQuery = "SELECT COUNT(*) FROM pull_requests WHERE id = ?"
             guard let count = try connection.scalar(existsQuery, pullRequest.id.value) as? Int64 else {
-                throw DatabaseError.queryFailed("Failed to check pull request existence")
+                throw DatabaseError.invalidQuery("Failed to check pull request existence")
             }
 
             if count > 0 {
