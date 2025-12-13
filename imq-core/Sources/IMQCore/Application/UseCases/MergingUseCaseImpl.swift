@@ -39,7 +39,24 @@ final class MergingUseCaseImpl: MergingUseCase, Sendable {
             ]
         )
 
-        // Verify PR is ready for merge
+        try await verifyPullRequestReadiness(pullRequest)
+
+        do {
+            try await verifyGitHubMergeable(pullRequest)
+            try await performMerge(pullRequest)
+        } catch let error as GitHubAPIError {
+            try await handleGitHubAPIError(error, pullRequest: pullRequest)
+        } catch let error as MergingError {
+            throw error
+        } catch {
+            try await handleUnknownError(error, pullRequest: pullRequest)
+        }
+    }
+
+    // MARK: - Private Helper Methods
+
+    /// Verify pull request is ready for merge
+    private func verifyPullRequestReadiness(_ pullRequest: PullRequest) async throws {
         guard !pullRequest.isConflicted else {
             logger.error(
                 "Cannot merge pull request - has conflicts",
@@ -57,86 +74,81 @@ final class MergingUseCaseImpl: MergingUseCase, Sendable {
             await postFailureComment(pullRequest: pullRequest, reason: "Pull request is not up to date with base branch")
             throw MergingError.notMergeable(reason: "Not up to date with base branch")
         }
+    }
 
-        do {
-            // Get the latest PR state from GitHub to verify it's still mergeable
-            let githubPR = try await githubGateway.getPullRequest(
-                owner: pullRequest.repository.owner,
-                repo: pullRequest.repository.name,
-                number: pullRequest.number
-            )
+    /// Verify pull request is mergeable on GitHub
+    private func verifyGitHubMergeable(_ pullRequest: PullRequest) async throws {
+        let githubPR = try await githubGateway.getPullRequest(
+            owner: pullRequest.repository.owner,
+            repo: pullRequest.repository.name,
+            number: pullRequest.number
+        )
 
-            // Check if PR is mergeable
-            guard githubPR.mergeable ?? false else {
-                logger.error(
-                    "Pull request is not mergeable",
-                    metadata: [
-                        "pr": .stringConvertible(pullRequest.number),
-                        "mergeableState": .string(githubPR.mergeableState)
-                    ]
-                )
-                await postFailureComment(pullRequest: pullRequest, reason: "Pull request is not in a mergeable state")
-                throw MergingError.notMergeable(reason: "Mergeable state: \(githubPR.mergeableState)")
-            }
-
-            // Note: The actual merge operation needs to be added to GitHubGateway protocol
-            // For now, we'll simulate the merge by posting a comment
-            // TODO: Add mergePullRequest method to GitHubGateway protocol
-            logger.warning(
-                "Merge simulation - actual merge not implemented yet",
-                metadata: ["pr": .stringConvertible(pullRequest.number)]
-            )
-
-            // Post success comment
-            await postSuccessComment(pullRequest: pullRequest)
-
-            logger.info(
-                "Successfully merged pull request",
-                metadata: ["pr": .stringConvertible(pullRequest.number)]
-            )
-        } catch let error as GitHubAPIError {
+        guard githubPR.mergeable ?? false else {
             logger.error(
-                "GitHub API error during merge",
+                "Pull request is not mergeable",
                 metadata: [
                     "pr": .stringConvertible(pullRequest.number),
-                    "error": .string(error.localizedDescription)
+                    "mergeableState": .string(githubPR.mergeableState)
                 ]
             )
-
-            // Post failure comment
-            await postFailureComment(pullRequest: pullRequest, reason: error.localizedDescription)
-
-            // Map GitHub API errors to merging errors
-            switch error {
-            case .unauthorized:
-                throw MergingError.unauthorized
-            case .forbidden:
-                throw MergingError.branchProtectionViolation(rule: "Forbidden access")
-            case .notFound:
-                throw MergingError.notMergeable(reason: "Pull request not found")
-            default:
-                throw MergingError.apiError(error)
-            }
-        } catch let error as MergingError {
-            // Re-throw merging errors
-            throw error
-        } catch {
-            logger.error(
-                "Unknown error during merge",
-                metadata: [
-                    "pr": .stringConvertible(pullRequest.number),
-                    "error": .string(error.localizedDescription)
-                ]
-            )
-
-            // Post failure comment
-            await postFailureComment(pullRequest: pullRequest, reason: error.localizedDescription)
-
-            throw MergingError.unknown(error)
+            await postFailureComment(pullRequest: pullRequest, reason: "Pull request is not in a mergeable state")
+            throw MergingError.notMergeable(reason: "Mergeable state: \(githubPR.mergeableState)")
         }
     }
 
-    // MARK: - Private Helper Methods
+    /// Perform the actual merge operation
+    private func performMerge(_ pullRequest: PullRequest) async throws {
+        logger.warning(
+            "Merge simulation - actual merge not implemented yet",
+            metadata: ["pr": .stringConvertible(pullRequest.number)]
+        )
+
+        await postSuccessComment(pullRequest: pullRequest)
+
+        logger.info(
+            "Successfully merged pull request",
+            metadata: ["pr": .stringConvertible(pullRequest.number)]
+        )
+    }
+
+    /// Handle GitHub API errors
+    private func handleGitHubAPIError(_ error: GitHubAPIError, pullRequest: PullRequest) async throws {
+        logger.error(
+            "GitHub API error during merge",
+            metadata: [
+                "pr": .stringConvertible(pullRequest.number),
+                "error": .string(error.localizedDescription)
+            ]
+        )
+
+        await postFailureComment(pullRequest: pullRequest, reason: error.localizedDescription)
+
+        switch error {
+        case .unauthorized:
+            throw MergingError.unauthorized
+        case .forbidden:
+            throw MergingError.branchProtectionViolation(rule: "Forbidden access")
+        case .notFound:
+            throw MergingError.notMergeable(reason: "Pull request not found")
+        default:
+            throw MergingError.apiError(error)
+        }
+    }
+
+    /// Handle unknown errors
+    private func handleUnknownError(_ error: Error, pullRequest: PullRequest) async throws {
+        logger.error(
+            "Unknown error during merge",
+            metadata: [
+                "pr": .stringConvertible(pullRequest.number),
+                "error": .string(error.localizedDescription)
+            ]
+        )
+
+        await postFailureComment(pullRequest: pullRequest, reason: error.localizedDescription)
+        throw MergingError.unknown(error)
+    }
 
     /// Post a success comment on the pull request
     private func postSuccessComment(pullRequest: PullRequest) async {

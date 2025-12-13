@@ -6,7 +6,7 @@ import NIOHTTP1
 
 /// GitHub API client for making HTTP requests
 /// Handles authentication, rate limiting, retries, and error handling
-actor GitHubAPIClient: Sendable {
+actor GitHubAPIClient {
     // MARK: - Properties
 
     private let httpClient: HTTPClient

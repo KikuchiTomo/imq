@@ -397,4 +397,3 @@ extension LogLevel {
         }
     }
 }
-

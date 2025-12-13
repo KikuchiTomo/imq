@@ -330,11 +330,9 @@ extension CheckConfiguration {
             return false
         }
 
-        for check in checks {
-            if !visited.contains(check.id) {
-                if hasCycle(check.id) {
-                    return true
-                }
+        for check in checks where !visited.contains(check.id) {
+            if hasCycle(check.id) {
+                return true
             }
         }
 

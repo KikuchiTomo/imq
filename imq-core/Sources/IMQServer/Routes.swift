@@ -27,7 +27,7 @@ func routes(_ app: Application) throws {
     try v1.register(collection: HealthController())
 
     // Catch-all for unmatched routes
-    app.get("**") { req -> Response in
+    app.get("**") { _ -> Response in
         throw Abort(.notFound, reason: "Endpoint not found")
     }
 }
