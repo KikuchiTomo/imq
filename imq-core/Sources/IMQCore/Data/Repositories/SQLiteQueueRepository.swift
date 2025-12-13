@@ -99,7 +99,7 @@ final class SQLiteQueueRepository: QueueRepository {
             // Check if queue exists
             let existsQuery = "SELECT COUNT(*) FROM queues WHERE id = ?"
             guard let count = try connection.scalar(existsQuery, queue.id.value) as? Int64 else {
-                throw DatabaseError.queryFailed("Failed to check queue existence")
+                throw DatabaseError.invalidQuery("Failed to check queue existence")
             }
 
             if count > 0 {

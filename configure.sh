@@ -253,7 +253,7 @@ interactive_configuration() {
     # GitHub Mode
     echo ""
     echo "GitHub Integration Mode:"
-    echo "  1) webhook (recommended) - Uses gh webhook forward"
+    echo "  1) webhook (recommended) - Real-time webhook events"
     echo "  2) polling - Polls GitHub API periodically"
     read -p "Select mode [1]: " MODE_CHOICE
     MODE_CHOICE=${MODE_CHOICE:-1}
@@ -275,6 +275,35 @@ interactive_configuration() {
                 GITHUB_REPO=""
             fi
         done
+
+        # Webhook proxy configuration
+        echo ""
+        echo "Webhook Delivery Method:"
+        echo "  1) Local development (uses gh webhook forward - for testing only)"
+        echo "  2) External proxy (ngrok, smee.io, Cloudflare Tunnel, etc.)"
+        read -p "Select method [1]: " PROXY_CHOICE
+        PROXY_CHOICE=${PROXY_CHOICE:-1}
+
+        if [ "$PROXY_CHOICE" = "2" ]; then
+            echo ""
+            echo "Enter your external proxy URL (or leave empty to configure later):"
+            echo "Examples: https://abc123.ngrok.io, https://smee.io/abc123"
+            read -p "Proxy URL: " WEBHOOK_PROXY_URL
+        fi
+
+        # Webhook secret
+        echo ""
+        read -p "Generate webhook secret for security? [Y/n]: " -n 1 -r
+        echo
+        if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+            WEBHOOK_SECRET=$(openssl rand -hex 32 2>/dev/null || head -c 32 /dev/urandom | xxd -p -c 32)
+            print_success "Webhook secret generated"
+        fi
+
+        # Trigger label
+        echo ""
+        read -p "Trigger label for merge queue [A-merge]: " INPUT_TRIGGER_LABEL
+        TRIGGER_LABEL=${INPUT_TRIGGER_LABEL:-A-merge}
     fi
 
     # API Port
@@ -367,6 +396,13 @@ IMQ_GITHUB_REPO=${GITHUB_REPO}
 IMQ_GITHUB_API_URL=https://api.github.com
 IMQ_GITHUB_MODE=${GITHUB_MODE}
 IMQ_POLLING_INTERVAL=60
+
+# ========================================
+# Webhook Configuration
+# ========================================
+IMQ_WEBHOOK_SECRET=${WEBHOOK_SECRET}
+IMQ_WEBHOOK_PROXY_URL=${WEBHOOK_PROXY_URL}
+IMQ_TRIGGER_LABEL=${TRIGGER_LABEL:-A-merge}
 
 # ========================================
 # Database Configuration
