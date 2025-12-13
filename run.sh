@@ -245,6 +245,28 @@ start_webhook_forward() {
         return
     fi
 
+    # Check if external proxy is configured
+    if [ ! -z "${IMQ_WEBHOOK_PROXY_URL}" ]; then
+        print_success "External webhook proxy is configured: ${IMQ_WEBHOOK_PROXY_URL}"
+        echo ""
+        print_info "To receive webhooks, configure your GitHub repository:"
+        echo ""
+        echo -e "  ${YELLOW}1. Go to your repository settings:${NC}"
+        echo -e "     https://github.com/${IMQ_GITHUB_REPO}/settings/hooks"
+        echo ""
+        echo -e "  ${YELLOW}2. Add a new webhook with:${NC}"
+        echo -e "     ${GREEN}Payload URL:${NC} ${IMQ_WEBHOOK_PROXY_URL}/webhook/github"
+        echo -e "     ${GREEN}Content type:${NC} application/json"
+        if [ ! -z "${IMQ_WEBHOOK_SECRET}" ]; then
+            echo -e "     ${GREEN}Secret:${NC} (use value from IMQ_WEBHOOK_SECRET in .env)"
+        fi
+        echo -e "     ${GREEN}Events:${NC} Select 'Send me everything' or specific events"
+        echo ""
+        print_info "Make sure your proxy forwards to: http://localhost:${IMQ_API_PORT:-8080}/webhook/github"
+        echo ""
+        return
+    fi
+
     # Check if repository is configured
     if [ -z "$IMQ_GITHUB_REPO" ]; then
         print_warning "GitHub repository is not configured in .env"
