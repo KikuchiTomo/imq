@@ -52,16 +52,19 @@ Usage: $0 [OPTIONS]
 Setup IMQ environment by creating .env file and configuring settings.
 
 OPTIONS:
-    -t, --github-token TOKEN    GitHub Personal Access Token
-    -r, --repo OWNER/REPO       GitHub repository (e.g., octocat/hello-world)
-    -m, --mode MODE            GitHub integration mode (polling|webhook, default: webhook)
-    -p, --api-port PORT        API server port (default: 8080)
-    -g, --gui-port PORT        GUI server port (default: 8081)
-    -e, --environment ENV      Environment (development|staging|production, default: development)
-    -b, --build                Build projects after configuration
-    -f, --force                Force overwrite existing .env file
-    -i, --interactive          Interactive mode (default if no options provided)
-    -h, --help                 Show this help message
+    -t, --github-token TOKEN              GitHub Personal Access Token
+    -r, --repo OWNER/REPO                 GitHub repository (e.g., octocat/hello-world)
+    -m, --mode MODE                       GitHub integration mode (polling|webhook, default: webhook)
+    -p, --api-port PORT                   API server port (default: 8080)
+    -g, --gui-port PORT                   GUI server port (default: 8081)
+    -e, --environment ENV                 Environment (development|staging|production, default: development)
+    --webhook-proxy-url URL               External webhook proxy URL (e.g., https://abc.ngrok.io)
+    --webhook-secret SECRET               Webhook secret for security (auto-generated if not provided)
+    --trigger-label LABEL                 Trigger label for merge queue (default: A-merge)
+    -b, --build                           Build projects after configuration
+    -f, --force                           Force overwrite existing .env file
+    -i, --interactive                     Interactive mode (default if no options provided)
+    -h, --help                            Show this help message
 
 EXAMPLES:
     # Interactive mode
@@ -72,6 +75,12 @@ EXAMPLES:
 
     # With custom ports
     $0 -t ghp_xxxx -r owner/repo -p 9080 -g 9081
+
+    # With external webhook proxy (ngrok, smee.io, etc.)
+    $0 -t ghp_xxxx -r owner/repo --webhook-proxy-url https://abc.ngrok.io
+
+    # With webhook secret
+    $0 -t ghp_xxxx -r owner/repo --webhook-secret $(openssl rand -hex 32)
 
     # Force overwrite and build
     $0 -t ghp_xxxx -r owner/repo -f -b
@@ -87,6 +96,9 @@ GITHUB_MODE="webhook"
 API_PORT="8080"
 GUI_PORT="8081"
 ENVIRONMENT="development"
+WEBHOOK_PROXY_URL=""
+WEBHOOK_SECRET=""
+TRIGGER_LABEL=""
 BUILD_AFTER_CONFIG=false
 FORCE_OVERWRITE=false
 INTERACTIVE_MODE=false
@@ -120,6 +132,18 @@ while [[ $# -gt 0 ]]; do
             ;;
         -e|--environment)
             ENVIRONMENT="$2"
+            shift 2
+            ;;
+        --webhook-proxy-url)
+            WEBHOOK_PROXY_URL="$2"
+            shift 2
+            ;;
+        --webhook-secret)
+            WEBHOOK_SECRET="$2"
+            shift 2
+            ;;
+        --trigger-label)
+            TRIGGER_LABEL="$2"
             shift 2
             ;;
         -b|--build)
@@ -376,6 +400,23 @@ validate_arguments() {
         print_error "Invalid environment: $ENVIRONMENT. Must be 'development', 'staging', or 'production'"
         usage
     fi
+
+    # Validate webhook proxy URL format if provided
+    if [ ! -z "$WEBHOOK_PROXY_URL" ] && [[ ! "$WEBHOOK_PROXY_URL" =~ ^https?:// ]]; then
+        print_error "Invalid webhook proxy URL: $WEBHOOK_PROXY_URL. Must start with http:// or https://"
+        usage
+    fi
+
+    # Auto-generate webhook secret if not provided and in webhook mode
+    if [ "$GITHUB_MODE" = "webhook" ] && [ -z "$WEBHOOK_SECRET" ]; then
+        WEBHOOK_SECRET=$(openssl rand -hex 32 2>/dev/null || head -c 32 /dev/urandom | xxd -p -c 32)
+        print_info "Auto-generated webhook secret for security"
+    fi
+
+    # Set default trigger label if not provided
+    if [ -z "$TRIGGER_LABEL" ]; then
+        TRIGGER_LABEL="A-merge"
+    fi
 }
 
 # Create .env file
@@ -501,6 +542,15 @@ show_summary() {
     if [ ! -z "$GITHUB_REPO" ]; then
         echo "  GitHub Repo:     ${GITHUB_REPO}"
     fi
+    if [ ! -z "$WEBHOOK_PROXY_URL" ]; then
+        echo "  Webhook Proxy:   ${WEBHOOK_PROXY_URL}"
+        echo "  Webhook Method:  External proxy (gh webhook forward disabled)"
+    elif [ "$GITHUB_MODE" = "webhook" ]; then
+        echo "  Webhook Method:  gh webhook forward (local testing)"
+    fi
+    if [ ! -z "$TRIGGER_LABEL" ]; then
+        echo "  Trigger Label:   ${TRIGGER_LABEL}"
+    fi
     echo "  API Port:        ${API_PORT}"
     echo "  GUI Port:        ${GUI_PORT}"
     echo "  Environment:     ${ENVIRONMENT}"
@@ -523,7 +573,10 @@ show_next_steps() {
 
     echo "  1. Start all services:"
     echo -e "     ${GREEN}./run.sh${NC}"
-    if [ "$GITHUB_MODE" = "webhook" ] && [ ! -z "$GITHUB_REPO" ]; then
+    if [ ! -z "$WEBHOOK_PROXY_URL" ]; then
+        echo "     (External webhook proxy configured: ${WEBHOOK_PROXY_URL})"
+        echo "     (Follow instructions in terminal to configure GitHub webhook)"
+    elif [ "$GITHUB_MODE" = "webhook" ] && [ ! -z "$GITHUB_REPO" ]; then
         echo "     (This will automatically start webhook forwarding for ${GITHUB_REPO})"
     fi
     echo ""
