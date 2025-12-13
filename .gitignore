@@ -60,3 +60,25 @@ fastlane/report.xml
 fastlane/Preview.html
 fastlane/screenshots/**/*.png
 fastlane/test_output
+
+# IMQ specific
+# Environment files (contains secrets)
+.env
+.env.local
+.env.*.local
+
+# Database files
+*.db
+*.db-shm
+*.db-wal
+
+# PID files
+.imq.pid
+.imq-daemon.pid
+
+# Log files
+logs/
+*.log
+
+# macOS
+.DS_Store
