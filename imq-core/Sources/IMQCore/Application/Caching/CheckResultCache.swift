@@ -23,7 +23,7 @@ import Logging
 ///     // Use cached result
 /// }
 /// ```
-public actor CheckResultCache: Sendable {
+public actor CheckResultCache {
     // MARK: - Types
 
     /// Cache key combining commit SHA and check name
@@ -279,8 +279,8 @@ public actor CheckResultCache: Sendable {
         let sortedKeys = storage.sorted { $0.value.createdAt < $1.value.createdAt }
         let toRemove = storage.count - targetSize
 
-        for i in 0..<min(toRemove, sortedKeys.count) {
-            storage.removeValue(forKey: sortedKeys[i].key)
+        for index in 0..<min(toRemove, sortedKeys.count) {
+            storage.removeValue(forKey: sortedKeys[index].key)
             evictions += 1
         }
 

@@ -29,7 +29,7 @@ import Logging
 /// // Later, gracefully shutdown
 /// await processor.shutdown()
 /// ```
-public actor QueueProcessor: Sendable {
+public actor QueueProcessor {
     // MARK: - Dependencies
 
     private let queueRepository: QueueRepository

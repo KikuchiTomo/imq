@@ -29,7 +29,7 @@ import Logging
 /// // Unsubscribe when done
 /// await eventBus.unsubscribe(subscription)
 /// ```
-public actor EventBus: Sendable {
+public actor EventBus {
     // MARK: - Types
 
     /// Event handler function type

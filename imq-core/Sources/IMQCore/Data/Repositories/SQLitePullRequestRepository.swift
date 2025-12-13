@@ -89,7 +89,9 @@ final class SQLitePullRequestRepository: PullRequestRepository {
         try await database.withConnection { connection in
             // Check if pull request exists
             let existsQuery = "SELECT COUNT(*) FROM pull_requests WHERE id = ?"
-            let count = try connection.scalar(existsQuery, pullRequest.id.value) as! Int64
+            guard let count = try connection.scalar(existsQuery, pullRequest.id.value) as? Int64 else {
+                throw DatabaseError.queryFailed("Failed to check pull request existence")
+            }
 
             if count > 0 {
                 // Update existing pull request

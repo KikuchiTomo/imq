@@ -11,8 +11,8 @@ public enum HTTPMethod: String {
 
 /// API Version
 public enum APIVersion: String {
-    case v1 = "v1"
-    case v2 = "v2"  // Future extension
+    case v1
+    case v2  // Future extension
 
     public var pathPrefix: String {
         return "/api/\(self.rawValue)"

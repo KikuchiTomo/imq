@@ -26,7 +26,7 @@ import Logging
 ///     // Process this queue
 /// }
 /// ```
-public actor FairQueueScheduler: Sendable {
+public actor FairQueueScheduler {
     // MARK: - Types
 
     /// Weighted queue entry for scheduling

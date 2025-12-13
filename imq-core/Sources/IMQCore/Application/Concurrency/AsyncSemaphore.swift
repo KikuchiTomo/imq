@@ -16,7 +16,7 @@ import Foundation
 /// // Perform work with limited concurrency
 /// await doWork()
 /// ```
-public actor AsyncSemaphore: Sendable {
+public actor AsyncSemaphore {
     // MARK: - Properties
 
     /// Number of currently available permits

@@ -98,7 +98,9 @@ final class SQLiteQueueRepository: QueueRepository {
         try await database.withConnection { connection in
             // Check if queue exists
             let existsQuery = "SELECT COUNT(*) FROM queues WHERE id = ?"
-            let count = try connection.scalar(existsQuery, queue.id.value) as! Int64
+            guard let count = try connection.scalar(existsQuery, queue.id.value) as? Int64 else {
+                throw DatabaseError.queryFailed("Failed to check queue existence")
+            }
 
             if count > 0 {
                 // Update existing queue

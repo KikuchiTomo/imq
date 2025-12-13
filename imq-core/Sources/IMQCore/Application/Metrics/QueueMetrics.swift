@@ -18,7 +18,7 @@ import Logging
 /// let summary = await metrics.getSummary()
 /// print("Success rate: \(summary.successRate)%")
 /// ```
-public actor QueueMetrics: Sendable {
+public actor QueueMetrics {
     // MARK: - Types
 
     /// Processing result record

@@ -71,11 +71,11 @@ public struct CheckID: Hashable, Codable, Sendable, CustomStringConvertible {
 
 /// Queue Entry Status
 public enum QueueEntryStatus: String, Codable, Sendable {
-    case pending = "pending"
-    case running = "running"
-    case completed = "completed"
-    case failed = "failed"
-    case cancelled = "cancelled"
+    case pending
+    case running
+    case completed
+    case failed
+    case cancelled
 }
 
 /// Check Status
