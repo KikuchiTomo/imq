@@ -386,17 +386,38 @@ Initial setup and configuration.
 ./configure.sh [OPTIONS]
 
 OPTIONS:
-  -t, --github-token TOKEN   GitHub Personal Access Token
-  -r, --repo OWNER/REPO      GitHub repository (e.g., octocat/hello-world)
-  -m, --mode MODE           Integration mode (polling|webhook)
-  -p, --api-port PORT       API server port (default: 8080)
-  -g, --gui-port PORT       GUI server port (default: 8081)
-  -e, --environment ENV     Environment (development|staging|production)
-  -b, --build              Build projects after configuration
-  -f, --force              Force overwrite existing .env
-  -i, --interactive        Interactive mode
-  -h, --help               Show help
+  -t, --github-token TOKEN              GitHub Personal Access Token
+  -r, --repo OWNER/REPO                 GitHub repository (e.g., octocat/hello-world)
+  -m, --mode MODE                       Integration mode (polling|webhook)
+  -p, --api-port PORT                   API server port (default: 8080)
+  -g, --gui-port PORT                   GUI server port (default: 8081)
+  -e, --environment ENV                 Environment (development|staging|production)
+  --webhook-proxy-url URL               External webhook proxy URL (e.g., https://abc.ngrok.io)
+  --webhook-secret SECRET               Webhook secret for security (auto-generated if not provided)
+  --trigger-label LABEL                 Trigger label for merge queue (default: A-merge)
+  -b, --build                           Build projects after configuration
+  -f, --force                           Force overwrite existing .env
+  -i, --interactive                     Interactive mode
+  -h, --help                            Show help
+
+EXAMPLES:
+  # Interactive mode (recommended)
+  ./configure.sh
+
+  # Basic webhook mode
+  ./configure.sh -t ghp_xxxx -r owner/repo -m webhook
+
+  # With external webhook proxy (ngrok, smee.io, etc.)
+  ./configure.sh -t ghp_xxxx -r owner/repo --webhook-proxy-url https://abc.ngrok.io
+
+  # With custom webhook secret
+  ./configure.sh -t ghp_xxxx -r owner/repo --webhook-secret $(openssl rand -hex 32)
+
+  # Polling mode
+  ./configure.sh -t ghp_xxxx -r owner/repo -m polling
 ```
+
+**Note**: When `--webhook-proxy-url` is set, IMQ will not use `gh webhook forward` and will instead expect webhooks from the external proxy.
 
 ### run.sh
 
