@@ -39,6 +39,26 @@
             "target": "imq-server",
             "configuration": "release",
             "preLaunchTask": "swift: Build Release imq-server (imq-core)"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:imq}/imq-gui",
+            "name": "Debug imq-gui (imq-gui)",
+            "target": "imq-gui",
+            "configuration": "debug",
+            "preLaunchTask": "swift: Build Debug imq-gui (imq-gui)"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:imq}/imq-gui",
+            "name": "Release imq-gui (imq-gui)",
+            "target": "imq-gui",
+            "configuration": "release",
+            "preLaunchTask": "swift: Build Release imq-gui (imq-gui)"
         }
     ]
 }
