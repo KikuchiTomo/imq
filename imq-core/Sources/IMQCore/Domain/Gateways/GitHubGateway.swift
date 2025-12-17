@@ -2,7 +2,7 @@ import Foundation
 
 /// Gateway for GitHub API interactions
 /// Provides methods for managing pull requests, branches, commits, workflows, and comments
-protocol GitHubGateway: Sendable {
+public protocol GitHubGateway: Sendable {
     /// Get pull request details from GitHub
     /// - Parameters:
     ///   - owner: Repository owner (user or organization)

@@ -79,6 +79,11 @@ struct WebhookController: RouteCollection {
         // Check if PR has trigger label
         let hasTriggerLabel = pr.labels.contains { $0.name == triggerLabel }
 
+        guard let queueRepo = req.application.storage[QueueRepositoryKey.self],
+              let prRepo = req.application.storage[PullRequestRepositoryKey.self] else {
+            throw Abort(.internalServerError, reason: "Repositories not available")
+        }
+
         switch action {
         case "labeled":
             if hasTriggerLabel {
@@ -86,7 +91,7 @@ struct WebhookController: RouteCollection {
                     "pr": "\(pr.number)",
                     "label": "\(triggerLabel)"
                 ])
-                // TODO: Add to queue
+                try await addPRToQueue(req: req, pr: pr, payload: payload, queueRepo: queueRepo, prRepo: prRepo)
             }
         case "unlabeled":
             if !hasTriggerLabel {
@@ -94,19 +99,136 @@ struct WebhookController: RouteCollection {
                     "pr": "\(pr.number)",
                     "label": "\(triggerLabel)"
                 ])
-                // TODO: Remove from queue
+                try await removePRFromQueue(req: req, prNumber: pr.number, payload: payload, queueRepo: queueRepo, prRepo: prRepo)
             }
         case "synchronize":
             if hasTriggerLabel {
                 req.logger.info("PR updated, re-queuing", metadata: ["pr": "\(pr.number)"])
-                // TODO: Update in queue
+                try await removePRFromQueue(req: req, prNumber: pr.number, payload: payload, queueRepo: queueRepo, prRepo: prRepo)
+                try await addPRToQueue(req: req, pr: pr, payload: payload, queueRepo: queueRepo, prRepo: prRepo)
             }
         case "closed":
             req.logger.info("PR closed, removing from queue", metadata: ["pr": "\(pr.number)"])
-            // TODO: Remove from queue
+            try await removePRFromQueue(req: req, prNumber: pr.number, payload: payload, queueRepo: queueRepo, prRepo: prRepo)
         default:
             req.logger.debug("Unhandled pull_request action", metadata: ["action": "\(action)"])
         }
+    }
+
+    /// Add PR to queue
+    private func addPRToQueue(
+        req: Request,
+        pr: GitHubWebhookPayload.PullRequest,
+        payload: GitHubWebhookPayload,
+        queueRepo: QueueRepository,
+        prRepo: PullRequestRepository
+    ) async throws {
+        // Save or update PR
+        let pullRequest = PullRequest(
+            id: 0,
+            repositoryID: payload.repository.id,
+            number: pr.number,
+            title: pr.title,
+            headBranch: pr.head.ref,
+            baseBranch: pr.base.ref,
+            headSHA: pr.head.sha,
+            status: .open,
+            createdAt: Date(),
+            updatedAt: Date()
+        )
+        let savedPR = try await prRepo.save(pullRequest)
+
+        // Find or create queue for this repository
+        let queues = try await queueRepo.getAll()
+        var queue = queues.first { $0.repositoryID == payload.repository.id }
+
+        if queue == nil {
+            let newQueue = Queue(
+                id: 0,
+                repositoryID: payload.repository.id,
+                status: .active,
+                createdAt: Date(),
+                updatedAt: Date()
+            )
+            queue = try await queueRepo.save(newQueue)
+        }
+
+        guard let targetQueue = queue else {
+            throw Abort(.internalServerError, reason: "Failed to create queue")
+        }
+
+        // Check if PR already in queue
+        let entries = try await queueRepo.getEntries(queueID: targetQueue.id)
+        if entries.contains(where: { $0.pullRequestID == savedPR.id }) {
+            req.logger.info("PR already in queue", metadata: ["pr": "\(pr.number)"])
+            return
+        }
+
+        // Add to queue
+        let nextPosition = (entries.map { $0.position }.max() ?? 0) + 1
+        let entry = QueueEntry(
+            id: 0,
+            queueID: targetQueue.id,
+            pullRequestID: savedPR.id,
+            position: nextPosition,
+            status: .pending,
+            addedAt: Date()
+        )
+        let savedEntry = try await queueRepo.addEntry(entry)
+
+        req.logger.info("PR added to queue", metadata: [
+            "pr": "\(pr.number)",
+            "queueID": "\(targetQueue.id)",
+            "position": "\(nextPosition)"
+        ])
+
+        await WebSocketController.broadcastQueueEvent(QueueEvent(
+            queueID: String(targetQueue.id),
+            action: "entry_added",
+            entryID: String(savedEntry.id)
+        ))
+    }
+
+    /// Remove PR from queue
+    private func removePRFromQueue(
+        req: Request,
+        prNumber: Int,
+        payload: GitHubWebhookPayload,
+        queueRepo: QueueRepository,
+        prRepo: PullRequestRepository
+    ) async throws {
+        // Find PR
+        guard let pr = try? await prRepo.getByNumber(repositoryID: payload.repository.id, number: prNumber) else {
+            req.logger.debug("PR not found in database", metadata: ["pr": "\(prNumber)"])
+            return
+        }
+
+        // Find queue
+        let queues = try await queueRepo.getAll()
+        guard let queue = queues.first(where: { $0.repositoryID == payload.repository.id }) else {
+            req.logger.debug("Queue not found for repository", metadata: ["repo": "\(payload.repository.id)"])
+            return
+        }
+
+        // Find and remove entry
+        let entries = try await queueRepo.getEntries(queueID: queue.id)
+        guard let entry = entries.first(where: { $0.pullRequestID == pr.id }) else {
+            req.logger.debug("PR not in queue", metadata: ["pr": "\(prNumber)"])
+            return
+        }
+
+        try await queueRepo.removeEntry(id: entry.id)
+
+        req.logger.info("PR removed from queue", metadata: [
+            "pr": "\(prNumber)",
+            "queueID": "\(queue.id)"
+        ])
+
+        await WebSocketController.broadcastQueueEvent(QueueEvent(
+            queueID: String(queue.id),
+            action: "entry_removed",
+            entryID: String(entry.id)
+        ))
     }
 
     /// Verify webhook signature
