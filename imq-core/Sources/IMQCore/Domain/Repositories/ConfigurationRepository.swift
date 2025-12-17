@@ -2,58 +2,54 @@ import Foundation
 
 /// System configuration entity
 /// Stores runtime configuration that can be modified through the application
-struct SystemConfiguration: Sendable {
+public struct SystemConfiguration: Sendable {
     /// Configuration ID (always 1 - single row table)
-    let id: Int
+    public let id: Int
 
     /// Label used to trigger merge queue operations
-    let triggerLabel: String
+    public let triggerLabel: String
 
-    /// GitHub integration mode (polling or webhook)
-    let githubMode: GitHubIntegrationMode
+    /// Webhook secret for validating GitHub webhook requests
+    /// Read-only: set via environment variable IMQ_WEBHOOK_SECRET
+    public let webhookSecret: String?
 
-    /// Polling interval in seconds (when in polling mode)
-    let pollingInterval: TimeInterval
-
-    /// Webhook secret for validating GitHub webhook requests (when in webhook mode)
-    let webhookSecret: String?
+    /// Webhook proxy URL
+    /// Read-only: set via environment variable IMQ_WEBHOOK_PROXY_URL
+    public let webhookProxyUrl: String?
 
     /// JSON string containing check configurations
     /// Defines which CI/CD checks must pass before merging
-    let checkConfigurations: String
+    public let checkConfigurations: String
 
     /// JSON string containing notification templates
     /// Defines messages for different events and notifications
-    let notificationTemplates: String
+    public let notificationTemplates: String
 
     /// Timestamp of last configuration update
-    let updatedAt: Date
+    public let updatedAt: Date
 
     /// Creates a new system configuration
     /// - Parameters:
     ///   - id: Configuration ID (defaults to 1)
     ///   - triggerLabel: Label to trigger queue operations
-    ///   - githubMode: Integration mode with GitHub
-    ///   - pollingInterval: Interval for polling mode
-    ///   - webhookSecret: Secret for webhook validation
+    ///   - webhookSecret: Secret for webhook validation (from env)
+    ///   - webhookProxyUrl: Webhook proxy URL (from env)
     ///   - checkConfigurations: JSON string of check configs
     ///   - notificationTemplates: JSON string of notification templates
     ///   - updatedAt: Last update timestamp
-    init(
+    public init(
         id: Int = 1,
         triggerLabel: String,
-        githubMode: GitHubIntegrationMode,
-        pollingInterval: TimeInterval,
         webhookSecret: String? = nil,
+        webhookProxyUrl: String? = nil,
         checkConfigurations: String,
         notificationTemplates: String,
         updatedAt: Date = Date()
     ) {
         self.id = id
         self.triggerLabel = triggerLabel
-        self.githubMode = githubMode
-        self.pollingInterval = pollingInterval
         self.webhookSecret = webhookSecret
+        self.webhookProxyUrl = webhookProxyUrl
         self.checkConfigurations = checkConfigurations
         self.notificationTemplates = notificationTemplates
         self.updatedAt = updatedAt
@@ -63,7 +59,7 @@ struct SystemConfiguration: Sendable {
 /// Repository protocol for SystemConfiguration operations
 /// Manages persistence and retrieval of system configuration
 /// Note: This is a single-row table with ID always set to 1
-protocol ConfigurationRepository: Sendable {
+public protocol ConfigurationRepository: Sendable {
     /// Retrieves the system configuration
     /// - Returns: The current system configuration
     /// - Throws: Repository errors if retrieval fails

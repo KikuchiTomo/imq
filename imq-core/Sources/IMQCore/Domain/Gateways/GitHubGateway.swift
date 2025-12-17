@@ -2,7 +2,7 @@ import Foundation
 
 /// Gateway for GitHub API interactions
 /// Provides methods for managing pull requests, branches, commits, workflows, and comments
-protocol GitHubGateway: Sendable {
+public protocol GitHubGateway: Sendable {
     /// Get pull request details from GitHub
     /// - Parameters:
     ///   - owner: Repository owner (user or organization)
@@ -87,6 +87,36 @@ protocol GitHubGateway: Sendable {
         number: Int,
         message: String
     ) async throws
+
+    /// Merge a pull request
+    /// - Parameters:
+    ///   - owner: Repository owner (user or organization)
+    ///   - repo: Repository name
+    ///   - number: Pull request number
+    ///   - options: Merge options
+    /// - Returns: Merge result with SHA
+    /// - Throws: GitHubAPIError if merge fails
+    func mergePullRequest(
+        owner: String,
+        repo: String,
+        number: Int,
+        options: MergeOptions
+    ) async throws -> MergeResult
+}
+
+// MARK: - Request Types
+
+/// Merge options for pull request
+public struct MergeOptions: Sendable {
+    public let commitTitle: String?
+    public let commitMessage: String?
+    public let mergeMethod: String
+
+    public init(commitTitle: String? = nil, commitMessage: String? = nil, mergeMethod: String = "squash") {
+        self.commitTitle = commitTitle
+        self.commitMessage = commitMessage
+        self.mergeMethod = mergeMethod
+    }
 }
 
 // MARK: - Response Types
@@ -180,6 +210,24 @@ public struct WorkflowRun: Sendable, Codable {
         self.id = id
         self.status = status
         self.conclusion = conclusion
+    }
+}
+
+/// Merge result
+public struct MergeResult: Sendable, Codable {
+    /// SHA of the merge commit
+    public let sha: String
+
+    /// Whether the merge was successful
+    public let merged: Bool
+
+    /// Merge status message
+    public let message: String
+
+    public init(sha: String, merged: Bool, message: String) {
+        self.sha = sha
+        self.merged = merged
+        self.message = message
     }
 }
 

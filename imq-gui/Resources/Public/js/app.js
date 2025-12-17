@@ -19,15 +19,35 @@ const queueService = new QueueService(apiClient);
 const queueStore = createQueueStore(queueService, wsClient);
 const configStore = createConfigStore(apiClient, wsClient);
 
-document.addEventListener('alpine:init', () => {
-    Alpine.store('queues', queueStore);
-    Alpine.store('config', configStore);
+console.log('[IMQ] app.js loaded, waiting for Alpine...');
 
-    Alpine.data('dashboard', () => createDashboardComponent(queueStore, wsClient));
-    Alpine.data('configEditor', () => createConfigEditor(configStore));
-});
+// Wait for Alpine to be available
+function initAlpine() {
+    if (typeof window.Alpine === 'undefined') {
+        console.log('[IMQ] Alpine not ready, retrying...');
+        setTimeout(initAlpine, 50);
+        return;
+    }
 
-// Kick off connections and initial fetch
-wsClient.connect();
-queueStore.init();
-configStore.init();
+    console.log('[IMQ] Alpine ready, registering components...');
+
+    window.Alpine.store('queues', queueStore);
+    window.Alpine.store('config', configStore);
+
+    window.Alpine.data('dashboard', () => createDashboardComponent(queueStore, wsClient));
+    window.Alpine.data('configEditor', () => createConfigEditor(configStore));
+
+    console.log('[IMQ] Components registered');
+
+    // Connect WebSocket after a short delay
+    setTimeout(() => {
+        wsClient.connect();
+    }, 500);
+}
+
+// Start initialization
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initAlpine);
+} else {
+    initAlpine();
+}

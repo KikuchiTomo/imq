@@ -48,6 +48,10 @@ enum GitHubAPIEndpoint: Sendable {
     /// POST /repos/{owner}/{repo}/issues/{number}/comments
     case postPullRequestComment(owner: String, repo: String, number: Int)
 
+    /// Merge pull request
+    /// PUT /repos/{owner}/{repo}/pulls/{number}/merge
+    case mergePullRequest(owner: String, repo: String, number: Int)
+
     // MARK: - Commits
 
     /// Compare two commits
@@ -78,6 +82,9 @@ enum GitHubAPIEndpoint: Sendable {
         case .postPullRequestComment(let owner, let repo, let number):
             return "/repos/\(owner)/\(repo)/issues/\(number)/comments"
 
+        case .mergePullRequest(let owner, let repo, let number):
+            return "/repos/\(owner)/\(repo)/pulls/\(number)/merge"
+
         case .compareCommits(let owner, let repo, let base, let head):
             return "/repos/\(owner)/\(repo)/compare/\(base)...\(head)"
 
@@ -97,7 +104,8 @@ enum GitHubAPIEndpoint: Sendable {
              .getWorkflowRun:
             return .get
 
-        case .updatePullRequestBranch:
+        case .updatePullRequestBranch,
+             .mergePullRequest:
             return .put
 
         case .postPullRequestComment,

@@ -38,28 +38,25 @@
 
                 <div class="bg-[rgba(251,191,36,0.1)] border border-yellow-500/30 rounded-lg p-4 text-sm text-yellow-200">
                     <p class="font-semibold mb-1">🔒 Security Notice</p>
-                    <p>GitHub Token, API URL, and Webhook Secret must be configured via environment variables (<code>IMQ_GITHUB_TOKEN</code>, <code>IMQ_GITHUB_API_URL</code>, <code>IMQ_WEBHOOK_SECRET</code>) for security. These cannot be changed from the web UI.</p>
+                    <p>GitHub Token, API URL, Webhook Secret, and Webhook Proxy URL must be configured via environment variables (<code>IMQ_GITHUB_TOKEN</code>, <code>IMQ_GITHUB_API_URL</code>, <code>IMQ_WEBHOOK_SECRET</code>, <code>IMQ_WEBHOOK_PROXY_URL</code>) for security. These cannot be changed from the web UI.</p>
                 </div>
 
                 <div class="grid gap-4 sm:grid-cols-2">
                     <div class="space-y-2">
-                        <label class="field-label">Integration Mode</label>
-                        <select class="input" x-model="config.githubMode">
-                            <option value="polling">Polling</option>
-                            <option value="webhook">Webhook</option>
-                        </select>
-                        <p class="text-xs text-slate-400">How IMQ receives GitHub events</p>
+                        <label class="field-label">Webhook Proxy URL</label>
+                        <input class="input" type="text" x-bind:value="config.webhookProxyUrl || 'Not configured'" disabled>
+                        <p class="text-xs text-slate-400">Configure via <code>IMQ_WEBHOOK_PROXY_URL</code> environment variable</p>
                     </div>
 
                     <div class="space-y-2">
-                        <label class="field-label">Polling Interval (seconds)</label>
-                        <input class="input" type="number" min="10" step="5" x-model.number="config.pollingInterval">
-                        <p class="text-xs text-slate-400">Minimum 10 seconds (polling mode only)</p>
+                        <label class="field-label">Webhook Secret</label>
+                        <input class="input" type="password" x-bind:value="config.webhookSecret ? '••••••••••••' : 'Not configured'" disabled>
+                        <p class="text-xs text-slate-400">Configure via <code>IMQ_WEBHOOK_SECRET</code> environment variable</p>
                     </div>
 
                     <div class="space-y-2 sm:col-span-2">
                         <label class="field-label">Trigger Label</label>
-                        <input class="input" type="text" placeholder="merge-queue" x-model="config.triggerLabel">
+                        <input class="input" type="text" placeholder="A-merge" x-model="config.triggerLabel">
                         <p class="text-xs text-slate-400">Label that enqueues PRs automatically</p>
                     </div>
                 </div>

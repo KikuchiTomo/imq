@@ -72,24 +72,21 @@ public struct StatsOverviewResponse: Content {
 /// Configuration Response
 public struct ConfigurationDTO: Content {
     public let triggerLabel: String
-    public let githubMode: String
-    public let pollingInterval: Double
     public let webhookSecret: String?
+    public let webhookProxyUrl: String?
     public let checkConfigurations: [String]
     public let notificationTemplates: [String]
 
     public init(
         triggerLabel: String,
-        githubMode: String,
-        pollingInterval: Double,
         webhookSecret: String?,
+        webhookProxyUrl: String?,
         checkConfigurations: [String],
         notificationTemplates: [String]
     ) {
         self.triggerLabel = triggerLabel
-        self.githubMode = githubMode
-        self.pollingInterval = pollingInterval
         self.webhookSecret = webhookSecret
+        self.webhookProxyUrl = webhookProxyUrl
         self.checkConfigurations = checkConfigurations
         self.notificationTemplates = notificationTemplates
     }

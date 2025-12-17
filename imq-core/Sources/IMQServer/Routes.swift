@@ -1,4 +1,5 @@
 import Vapor
+import IMQCore
 
 /// Configure routes
 func routes(_ app: Application) throws {
@@ -17,12 +18,20 @@ func routes(_ app: Application) throws {
         await WebSocketController.handleConnection(req, ws)
     }
 
+    // GitHub Webhook endpoint at root (receives from reverse proxy)
+    try app.register(collection: WebhookController())
+
     // API v1 routes
     let v1 = app.grouped("api", "v1")
 
+    // Get repositories from app storage
+    guard let configRepo = app.storage[ConfigRepositoryKey.self] else {
+        fatalError("ConfigurationRepository not initialized")
+    }
+
     // Register controllers
     try v1.register(collection: QueueController())
-    try v1.register(collection: ConfigurationController())
+    try v1.register(collection: ConfigurationController(repository: configRepo))
     try v1.register(collection: StatsController())
     try v1.register(collection: HealthController())
 

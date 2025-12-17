@@ -22,7 +22,6 @@ PID_FILE="${SCRIPT_DIR}/.imq.pid"
 # PIDs of child processes
 CORE_PID=""
 GUI_PID=""
-WEBHOOK_PID=""
 
 # Cleanup flag
 CLEANUP_DONE=false
@@ -109,16 +108,6 @@ check_prerequisites() {
         cd "${SCRIPT_DIR}"
     fi
 
-    # Check gh command if webhook mode
-    if [ "${IMQ_GITHUB_MODE:-webhook}" = "webhook" ]; then
-        if ! command -v gh &> /dev/null; then
-            print_error "GitHub CLI (gh) is not installed, but webhook mode is enabled"
-            print_info "Install gh from: https://cli.github.com/"
-            print_info "Or change IMQ_GITHUB_MODE to 'polling' in .env"
-            exit 1
-        fi
-    fi
-
     print_success "All prerequisites met"
 }
 
@@ -133,11 +122,6 @@ cleanup() {
     print_info "Shutting down services..."
 
     # Kill all child processes
-    if [ ! -z "$WEBHOOK_PID" ] && kill -0 "$WEBHOOK_PID" 2>/dev/null; then
-        print_webhook "Stopping webhook forwarder (PID: $WEBHOOK_PID)..."
-        kill "$WEBHOOK_PID" 2>/dev/null || true
-    fi
-
     if [ ! -z "$GUI_PID" ] && kill -0 "$GUI_PID" 2>/dev/null; then
         print_gui "Stopping GUI server (PID: $GUI_PID)..."
         kill "$GUI_PID" 2>/dev/null || true
@@ -152,7 +136,7 @@ cleanup() {
     sleep 1
 
     # Force kill if still running
-    for pid in $WEBHOOK_PID $GUI_PID $CORE_PID; do
+    for pid in $GUI_PID $CORE_PID; do
         if [ ! -z "$pid" ] && kill -0 "$pid" 2>/dev/null; then
             kill -9 "$pid" 2>/dev/null || true
         fi
@@ -176,9 +160,11 @@ start_core() {
 
     # Export environment variables
     export IMQ_GITHUB_TOKEN
+    export IMQ_GITHUB_REPO
     export IMQ_GITHUB_API_URL
-    export IMQ_GITHUB_MODE
-    export IMQ_POLLING_INTERVAL
+    export IMQ_WEBHOOK_SECRET
+    export IMQ_WEBHOOK_PROXY_URL
+    export IMQ_TRIGGER_LABEL
     export IMQ_DATABASE_PATH
     export IMQ_DATABASE_POOL_SIZE
     export IMQ_API_HOST
@@ -238,104 +224,40 @@ start_gui() {
     print_success "imq-gui started (PID: $GUI_PID)"
 }
 
-# Start gh webhook forwarding
-start_webhook_forward() {
-    if [ "${IMQ_GITHUB_MODE:-webhook}" != "webhook" ]; then
-        print_info "Webhook mode is disabled, skipping gh webhook forward"
-        return
-    fi
-
-    # Check if external proxy is configured
+# Show webhook configuration
+show_webhook_config() {
+    echo ""
     if [ ! -z "${IMQ_WEBHOOK_PROXY_URL}" ]; then
-        print_success "External webhook proxy is configured: ${IMQ_WEBHOOK_PROXY_URL}"
+        print_success "Webhook proxy configured: ${IMQ_WEBHOOK_PROXY_URL}"
         echo ""
         print_info "To receive webhooks, configure your GitHub repository:"
         echo ""
         echo -e "  ${YELLOW}1. Go to your repository settings:${NC}"
-        echo -e "     https://github.com/${IMQ_GITHUB_REPO}/settings/hooks"
+        if [ ! -z "${IMQ_GITHUB_REPO}" ]; then
+            echo -e "     https://github.com/${IMQ_GITHUB_REPO}/settings/hooks"
+        else
+            echo -e "     https://github.com/OWNER/REPO/settings/hooks"
+        fi
         echo ""
         echo -e "  ${YELLOW}2. Add a new webhook with:${NC}"
-        echo -e "     ${GREEN}Payload URL:${NC} ${IMQ_WEBHOOK_PROXY_URL}/webhook/github"
+        echo -e "     ${GREEN}Payload URL:${NC} ${IMQ_WEBHOOK_PROXY_URL}/"
         echo -e "     ${GREEN}Content type:${NC} application/json"
         if [ ! -z "${IMQ_WEBHOOK_SECRET}" ]; then
             echo -e "     ${GREEN}Secret:${NC} (use value from IMQ_WEBHOOK_SECRET in .env)"
         fi
         echo -e "     ${GREEN}Events:${NC} Select 'Send me everything' or specific events"
         echo ""
-        print_info "Make sure your proxy forwards to: http://localhost:${IMQ_API_PORT:-8080}/webhook/github"
+        print_info "Make sure your reverse proxy forwards to: http://localhost:${IMQ_API_PORT:-8080}/"
+    else
+        print_warning "Webhook proxy URL is not configured"
+        print_info "To receive webhooks, set IMQ_WEBHOOK_PROXY_URL in .env"
         echo ""
-        return
+        echo -e "  Examples:"
+        echo -e "    ${GREEN}IMQ_WEBHOOK_PROXY_URL=https://abc123.ngrok-free.app${NC}"
+        echo -e "    ${GREEN}IMQ_WEBHOOK_PROXY_URL=https://smee.io/abc123${NC}"
+        echo -e "    ${GREEN}IMQ_WEBHOOK_PROXY_URL=https://imq.your-domain.com${NC}"
     fi
-
-    # Check if repository is configured
-    if [ -z "$IMQ_GITHUB_REPO" ]; then
-        print_warning "GitHub repository is not configured in .env"
-        print_info "To enable automatic webhook forwarding, add to .env:"
-        echo ""
-        echo -e "  ${GREEN}IMQ_GITHUB_REPO=OWNER/REPO${NC}"
-        echo ""
-        print_info "Or manually forward webhooks by running:"
-        echo ""
-        echo -e "  ${GREEN}gh webhook forward --repo OWNER/REPO \\${NC}"
-        echo -e "    ${GREEN}--url http://localhost:${IMQ_API_PORT:-8080}/webhook/github \\${NC}"
-        echo -e "    ${GREEN}--events='*'${NC}"
-        echo ""
-        return
-    fi
-
-    # Check if gh webhook extension is installed
-    if ! gh extension list 2>/dev/null | grep -q "cli/gh-webhook"; then
-        print_info "GitHub CLI webhook extension is not installed"
-        print_info "Installing webhook extension automatically..."
-
-        if gh extension install cli/gh-webhook 2>&1 | grep -v "^$"; then
-            print_success "GitHub CLI webhook extension installed successfully"
-        else
-            print_error "Failed to install webhook extension"
-            print_info "Please install it manually:"
-            echo ""
-            echo -e "  ${GREEN}gh extension install cli/gh-webhook${NC}"
-            echo ""
-            print_info "Or set IMQ_GITHUB_MODE=polling in .env for polling mode"
-            echo ""
-            return
-        fi
-    fi
-
-    # Start webhook forwarder
-    print_webhook "Starting webhook forwarder for ${IMQ_GITHUB_REPO}..."
-
-    gh webhook forward \
-        --repo="$IMQ_GITHUB_REPO" \
-        --url="http://localhost:${IMQ_API_PORT:-8080}/webhook/github" \
-        --events='*' 2>&1 | while IFS= read -r line; do
-        print_webhook "$line"
-    done &
-
-    WEBHOOK_PID=$!
-
-    # Wait a bit to see if it crashes immediately
-    sleep 2
-    if ! kill -0 "$WEBHOOK_PID" 2>/dev/null; then
-        print_error "Failed to start webhook forwarder"
-        print_info "Common issues:"
-        echo ""
-        echo -e "  ${YELLOW}1. Not authenticated:${NC}"
-        echo -e "     Run: ${GREEN}gh auth login${NC}"
-        echo ""
-        echo -e "  ${YELLOW}2. No repository access:${NC}"
-        echo -e "     Make sure you have admin access to ${IMQ_GITHUB_REPO}"
-        echo ""
-        echo -e "  ${YELLOW}3. Another user is already forwarding:${NC}"
-        echo -e "     Only one user can forward webhooks at a time"
-        echo ""
-        print_info "Alternatively, set IMQ_GITHUB_MODE=polling in .env"
-        echo ""
-        WEBHOOK_PID=""
-        return
-    fi
-
-    print_success "Webhook forwarder started (PID: $WEBHOOK_PID)"
+    echo ""
 }
 
 # Save PIDs to file
@@ -343,7 +265,6 @@ save_pids() {
     cat > "$PID_FILE" << EOF
 CORE_PID=$CORE_PID
 GUI_PID=$GUI_PID
-WEBHOOK_PID=$WEBHOOK_PID
 EOF
     print_info "PIDs saved to: $PID_FILE"
 }
@@ -381,13 +302,12 @@ main() {
     start_gui
     sleep 2  # Wait for gui to initialize
 
-    start_webhook_forward
-
     # Save PIDs
     save_pids
 
-    # Show URLs
+    # Show URLs and webhook configuration
     show_urls
+    show_webhook_config
 
     # Wait for all processes
     wait
