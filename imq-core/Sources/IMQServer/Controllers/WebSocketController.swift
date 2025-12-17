@@ -3,33 +3,47 @@ import IMQCore
 
 /// WebSocket Controller
 /// Handles WebSocket connections for real-time updates
-actor WebSocketManager {
+final class WebSocketManager {
     private var clients: [UUID: WebSocket] = [:]
+    private let lock = NSLock()
 
     static let shared = WebSocketManager()
 
     func addClient(_ id: UUID, _ ws: WebSocket) {
+        lock.lock()
+        defer { lock.unlock() }
         clients[id] = ws
     }
 
     func removeClient(_ id: UUID) {
+        lock.lock()
+        defer { lock.unlock() }
         clients.removeValue(forKey: id)
     }
 
     func broadcast(_ jsonString: String) {
-        for (_, ws) in clients {
-            ws.send(jsonString)
+        lock.lock()
+        let currentClients = clients
+        lock.unlock()
+
+        for (_, ws) in currentClients {
+            ws.eventLoop.execute {
+                ws.send(jsonString)
+            }
         }
     }
 }
 
 struct WebSocketController {
     /// Handle new WebSocket connection
-    static func handleConnection(_ req: Request, _ ws: WebSocket) async {
+    static func handleConnection(_ req: Request, _ ws: WebSocket) {
         let clientID = UUID()
 
+        req.logger.info("WebSocket connection starting", metadata: ["clientID": "\(clientID)"])
+
         // Register client
-        await WebSocketManager.shared.addClient(clientID, ws)
+        WebSocketManager.shared.addClient(clientID, ws)
+        req.logger.info("Client registered in manager", metadata: ["clientID": "\(clientID)"])
 
         req.logger.info("WebSocket client connected", metadata: ["clientID": "\(clientID)"])
 
@@ -39,10 +53,29 @@ struct WebSocketController {
             data: ["clientID": clientID.uuidString, "timestamp": Date().iso8601String]
         )
 
+        req.logger.info("Preparing to send welcome message", metadata: ["clientID": "\(clientID)"])
+
         if let jsonData = try? JSONEncoder().encode(welcomeMessage),
            let jsonString = String(data: jsonData, encoding: .utf8) {
-            try? await ws.send(jsonString)
+            req.logger.info("Encoded welcome message, scheduling send on eventLoop", metadata: ["clientID": "\(clientID)"])
+            req.logger.info("About to call ws.eventLoop.execute", metadata: ["clientID": "\(clientID)"])
+
+            let eventLoop = ws.eventLoop
+            req.logger.info("Got ws.eventLoop reference", metadata: ["clientID": "\(clientID)"])
+
+            eventLoop.execute {
+                fflush(stdout)
+                print("[DEBUG] Inside eventLoop.execute START for client: \(clientID)")
+                fflush(stdout)
+                ws.send(jsonString)
+                fflush(stdout)
+                print("[DEBUG] ws.send() completed for client: \(clientID)")
+                fflush(stdout)
+            }
+            req.logger.info("eventLoop.execute scheduled", metadata: ["clientID": "\(clientID)"])
         }
+
+        req.logger.info("About to register ws.onText handler", metadata: ["clientID": "\(clientID)"])
 
         // Handle incoming messages
         ws.onText { ws, text in
@@ -57,13 +90,17 @@ struct WebSocketController {
             }
         }
 
+        req.logger.info("ws.onText handler registered", metadata: ["clientID": "\(clientID)"])
+        req.logger.info("About to register ws.onClose handler", metadata: ["clientID": "\(clientID)"])
+
         // Handle connection close
         ws.onClose.whenComplete { _ in
-            Task {
-                await WebSocketManager.shared.removeClient(clientID)
-                req.logger.info("WebSocket client disconnected", metadata: ["clientID": "\(clientID)"])
-            }
+            WebSocketManager.shared.removeClient(clientID)
+            req.logger.info("WebSocket client disconnected", metadata: ["clientID": "\(clientID)"])
         }
+
+        req.logger.info("ws.onClose handler registered", metadata: ["clientID": "\(clientID)"])
+        req.logger.info("handleConnection completed", metadata: ["clientID": "\(clientID)"])
     }
 
     /// Handle incoming WebSocket message
@@ -73,8 +110,8 @@ struct WebSocketController {
             let pongMessage = WebSocketMessage(type: "pong", data: ["timestamp": Date().iso8601String])
             if let jsonData = try? JSONEncoder().encode(pongMessage),
                let jsonString = String(data: jsonData, encoding: .utf8) {
-                Task {
-                    try? await ws.send(jsonString)
+                ws.eventLoop.execute {
+                    ws.send(jsonString)
                 }
             }
 
@@ -90,31 +127,31 @@ struct WebSocketController {
     }
 
     /// Broadcast message to all connected clients
-    static func broadcast(_ message: WebSocketMessage) async {
+    static func broadcast(_ message: WebSocketMessage) {
         guard let jsonData = try? JSONEncoder().encode(message),
               let jsonString = String(data: jsonData, encoding: .utf8) else {
             return
         }
 
-        await WebSocketManager.shared.broadcast(jsonString)
+        WebSocketManager.shared.broadcast(jsonString)
     }
 
     /// Broadcast queue event
-    static func broadcastQueueEvent(_ event: QueueEvent) async {
+    static func broadcastQueueEvent(_ event: QueueEvent) {
         let message = WebSocketMessage(type: "queue_event", data: event.toDictionary())
-        await broadcast(message)
+        broadcast(message)
     }
 
     /// Broadcast PR event
-    static func broadcastPREvent(_ event: PREvent) async {
+    static func broadcastPREvent(_ event: PREvent) {
         let message = WebSocketMessage(type: "pr_event", data: event.toDictionary())
-        await broadcast(message)
+        broadcast(message)
     }
 
     /// Broadcast check event
-    static func broadcastCheckEvent(_ event: CheckEvent) async {
+    static func broadcastCheckEvent(_ event: CheckEvent) {
         let message = WebSocketMessage(type: "check_event", data: event.toDictionary())
-        await broadcast(message)
+        broadcast(message)
     }
 }
 

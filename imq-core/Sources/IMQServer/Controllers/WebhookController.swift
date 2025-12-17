@@ -206,7 +206,7 @@ struct WebhookController: RouteCollection {
             "position": "\(nextPosition)"
         ])
 
-        await WebSocketController.broadcastQueueEvent(QueueEvent(
+        WebSocketController.broadcastQueueEvent(QueueEvent(
             queueID: String(targetQueue.id),
             action: "entry_added",
             entryID: String(savedEntry.id)
@@ -248,7 +248,7 @@ struct WebhookController: RouteCollection {
             "queueID": "\(queue.id)"
         ])
 
-        await WebSocketController.broadcastQueueEvent(QueueEvent(
+        WebSocketController.broadcastQueueEvent(QueueEvent(
             queueID: String(queue.id),
             action: "entry_removed",
             entryID: String(entry.id)

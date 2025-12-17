@@ -14,8 +14,8 @@ func routes(_ app: Application) throws {
     }
 
     // WebSocket endpoint
-    app.webSocket("ws", "events") { req, ws async in
-        await WebSocketController.handleConnection(req, ws)
+    app.webSocket("ws", "events") { req, ws in
+        WebSocketController.handleConnection(req, ws)
     }
 
     // GitHub Webhook endpoint at root (receives from reverse proxy)
