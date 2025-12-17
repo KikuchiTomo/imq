@@ -16,6 +16,10 @@
         };
     </script>
     <script type="module">
+        // Import Alpine.js as ES module for proper control
+        import Alpine from 'https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/module.esm.js';
+
+        // Import application modules
         import { APIClient } from '/js/clients/APIClient.js';
         import { WebSocketClient } from '/js/clients/WebSocketClient.js';
         import { QueueService } from '/js/services/QueueService.js';
@@ -37,19 +41,23 @@
         const queueStore = createQueueStore(queueService, wsClient);
         const configStore = createConfigStore(apiClient, wsClient);
 
-        window.queueStore = queueStore;
-        window.configStore = configStore;
-        window.wsClient = wsClient;
-        window.createDashboardComponent = createDashboardComponent;
-        window.createConfigEditor = createConfigEditor;
+        // Register Alpine stores
+        Alpine.store('queues', queueStore);
+        Alpine.store('config', configStore);
+
+        // Register Alpine components
+        Alpine.data('dashboard', () => createDashboardComponent(queueStore, wsClient));
+        Alpine.data('configEditor', () => createConfigEditor(configStore));
+
+        // Make Alpine globally available
+        window.Alpine = Alpine;
+
+        // Start Alpine
+        Alpine.start();
+
+        // Connect WebSocket after Alpine is ready
+        setTimeout(() => wsClient.connect(), 500);
     </script>
-    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" onload="
-        Alpine.store('queues', window.queueStore);
-        Alpine.store('config', window.configStore);
-        Alpine.data('dashboard', () => window.createDashboardComponent(window.queueStore, window.wsClient));
-        Alpine.data('configEditor', () => window.createConfigEditor(window.configStore));
-        setTimeout(() => window.wsClient.connect(), 500);
-    "></script>
 </head>
 <body class="min-h-screen">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">

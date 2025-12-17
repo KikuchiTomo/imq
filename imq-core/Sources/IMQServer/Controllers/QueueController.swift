@@ -87,7 +87,7 @@ struct QueueController: RouteCollection {
             updatedAt: savedQueue.updatedAt
         )
 
-        await WebSocketController.broadcastQueueEvent(QueueEvent(
+        WebSocketController.broadcastQueueEvent(QueueEvent(
             queueID: String(savedQueue.id),
             action: "created",
             entryID: nil
@@ -110,7 +110,7 @@ struct QueueController: RouteCollection {
 
         try await queueRepo.delete(id: queueID)
 
-        await WebSocketController.broadcastQueueEvent(QueueEvent(
+        WebSocketController.broadcastQueueEvent(QueueEvent(
             queueID: String(queueID),
             action: "deleted",
             entryID: nil
@@ -181,7 +181,7 @@ struct QueueController: RouteCollection {
             addedAt: savedEntry.addedAt
         )
 
-        await WebSocketController.broadcastQueueEvent(QueueEvent(
+        WebSocketController.broadcastQueueEvent(QueueEvent(
             queueID: String(queueID),
             action: "entry_added",
             entryID: String(savedEntry.id)
@@ -206,7 +206,7 @@ struct QueueController: RouteCollection {
 
         try await queueRepo.removeEntry(id: entryID)
 
-        await WebSocketController.broadcastQueueEvent(QueueEvent(
+        WebSocketController.broadcastQueueEvent(QueueEvent(
             queueID: String(queueID),
             action: "entry_removed",
             entryID: String(entryID)
@@ -231,7 +231,7 @@ struct QueueController: RouteCollection {
 
         try await queueRepo.reorderEntries(queueID: queueID, entryIDs: reorderRequest.entryIDs)
 
-        await WebSocketController.broadcastQueueEvent(QueueEvent(
+        WebSocketController.broadcastQueueEvent(QueueEvent(
             queueID: String(queueID),
             action: "reordered",
             entryID: nil
