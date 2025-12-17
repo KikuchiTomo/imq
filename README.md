@@ -20,15 +20,12 @@ A lightweight, local GitHub merge queue system that automates pull request testi
 
 ## Installation
 
-### 1. Clone the Repository
+### Setup
 
 ```bash
 git clone https://github.com/yourusername/imq.git
 cd imq
-```
-
-### 2. Configure Environment
-
+``
 Run the interactive configuration script:
 
 ```bash
@@ -47,8 +44,6 @@ Or use command-line arguments:
 
 This creates a `.env` file with your settings.
 
-### 3. Set Up Webhook Proxy
-
 IMQ requires a reverse proxy to forward GitHub webhooks to your local server. Set up your preferred reverse proxy service and configure it to forward requests to `http://localhost:8080/webhook/github`.
 
 Update your `.env` file with the proxy URL:
@@ -56,8 +51,7 @@ Update your `.env` file with the proxy URL:
 ```bash
 IMQ_WEBHOOK_PROXY_URL=https://your-proxy-url.com
 ```
-
-### 4. Configure GitHub Webhook
+### Configure GitHub Webhook
 
 Go to your repository settings on GitHub:
 
