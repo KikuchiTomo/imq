@@ -282,9 +282,7 @@ public actor GitHubGatewayImpl: GitHubGateway {
         owner: String,
         repo: String,
         number: Int,
-        commitTitle: String?,
-        commitMessage: String?,
-        mergeMethod: String
+        options: MergeOptions
     ) async throws -> MergeResult {
         logger.info(
             "Merging pull request",
@@ -292,7 +290,7 @@ public actor GitHubGatewayImpl: GitHubGateway {
                 "owner": .string(owner),
                 "repo": .string(repo),
                 "number": .stringConvertible(number),
-                "mergeMethod": .string(mergeMethod)
+                "mergeMethod": .string(options.mergeMethod)
             ]
         )
 
@@ -303,9 +301,9 @@ public actor GitHubGatewayImpl: GitHubGateway {
         )
 
         let requestBody = MergePullRequestRequest(
-            commitTitle: commitTitle,
-            commitMessage: commitMessage,
-            mergeMethod: mergeMethod
+            commitTitle: options.commitTitle,
+            commitMessage: options.commitMessage,
+            mergeMethod: options.mergeMethod
         )
 
         do {

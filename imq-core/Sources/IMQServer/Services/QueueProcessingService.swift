@@ -145,12 +145,10 @@ public actor QueueProcessingService {
             "position": "\(entry.position)"
         ])
 
-        // Update entry status to processing
         var updatedEntry = entry
         updatedEntry.status = .processing
         try await queueRepo.updateEntry(updatedEntry)
 
-        // Broadcast status update
         await WebSocketController.broadcastQueueEvent(QueueEvent(
             queueID: String(queue.id),
             action: "entry_processing",
@@ -158,149 +156,174 @@ public actor QueueProcessingService {
         ))
 
         do {
-            // Get the pull request
             guard let pr = try? await prRepo.get(id: entry.pullRequestID) else {
                 logger.error("Pull request not found", metadata: ["prID": "\(entry.pullRequestID)"])
                 throw ProcessingError.pullRequestNotFound
             }
 
-            // Get repository info
             let repoInfo = try parseRepositoryInfo(pr: pr)
-
-            // Get configuration for checks
             let config = try await configRepo.get()
 
-            // Execute checks if configured
-            if !config.checkConfigurations.isEmpty && config.checkConfigurations != "[]" {
-                logger.info("Executing checks", metadata: ["prNumber": "\(pr.number)"])
-                let checksPassed = try await checkExecutionService.executeChecks(
-                    owner: repoInfo.owner,
-                    repo: repoInfo.repo,
-                    prNumber: pr.number,
-                    headSHA: pr.headSHA,
-                    checkConfigurations: config.checkConfigurations
-                )
-
-                if !checksPassed {
-                    logger.warning("Checks failed for PR", metadata: ["prNumber": "\(pr.number)"])
-
-                    // Update entry status to failed
-                    updatedEntry.status = .failed
-                    try await queueRepo.updateEntry(updatedEntry)
-
-                    // Remove from queue
-                    try await queueRepo.removeEntry(id: entry.id)
-
-                    // Broadcast failure
-                    await WebSocketController.broadcastQueueEvent(QueueEvent(
-                        queueID: String(queue.id),
-                        action: "entry_failed",
-                        entryID: String(entry.id)
-                    ))
-
-                    // Post comment on PR
-                    try? await githubGateway.postComment(
-                        owner: repoInfo.owner,
-                        repo: repoInfo.repo,
-                        number: pr.number,
-                        message: "❌ Checks failed. Removed from merge queue."
-                    )
-
-                    return
-                }
-            }
-
-            // Update PR branch before merging
-            logger.info("Updating PR branch", metadata: ["prNumber": "\(pr.number)"])
-            let updateResult = try await githubGateway.updatePullRequestBranch(
-                owner: repoInfo.owner,
-                repo: repoInfo.repo,
-                number: pr.number
+            let context = ProcessingContext(
+                pullRequest: pr,
+                repoInfo: repoInfo,
+                config: config,
+                entry: entry,
+                queue: queue,
+                queueRepo: queueRepo,
+                prRepo: prRepo
             )
 
-            logger.info("Branch updated", metadata: [
-                "prNumber": "\(pr.number)",
-                "message": .string(updateResult.message)
-            ])
-
-            // Wait a bit for the update to complete
-            try await Task.sleep(nanoseconds: 2_000_000_000) // 2 seconds
-
-            // Merge the pull request
-            logger.info("Merging pull request", metadata: ["prNumber": "\(pr.number)"])
-            let mergeResult = try await githubGateway.mergePullRequest(
-                owner: repoInfo.owner,
-                repo: repoInfo.repo,
-                number: pr.number,
-                commitTitle: nil,
-                commitMessage: "Merged via IMQ",
-                mergeMethod: "squash"
-            )
-
-            logger.info("Pull request merged successfully", metadata: [
-                "prNumber": "\(pr.number)",
-                "sha": .string(mergeResult.sha)
-            ])
-
-            // Update entry status to completed
-            updatedEntry.status = .completed
-            try await queueRepo.updateEntry(updatedEntry)
-
-            // Remove from queue
-            try await queueRepo.removeEntry(id: entry.id)
-
-            // Update PR status
-            var mergedPR = pr
-            mergedPR.status = .merged
-            try await prRepo.save(mergedPR)
-
-            // Broadcast success
-            await WebSocketController.broadcastQueueEvent(QueueEvent(
-                queueID: String(queue.id),
-                action: "entry_completed",
-                entryID: String(entry.id)
-            ))
-
-            // Post success comment
-            try? await githubGateway.postComment(
-                owner: repoInfo.owner,
-                repo: repoInfo.repo,
-                number: pr.number,
-                message: "✅ Successfully merged via IMQ!"
-            )
-
+            try await executeChecksIfNeeded(context: context, updatedEntry: &updatedEntry)
+            try await updateAndMergePR(context: context)
+            try await handleMergeSuccess(context: context, updatedEntry: &updatedEntry)
         } catch {
-            logger.error("Failed to process entry", metadata: [
-                "entryID": "\(entry.id)",
-                "error": .string(error.localizedDescription)
-            ])
-
-            // Update entry status to failed
-            updatedEntry.status = .failed
-            try await queueRepo.updateEntry(updatedEntry)
-
-            // Broadcast failure
-            await WebSocketController.broadcastQueueEvent(QueueEvent(
-                queueID: String(queue.id),
-                action: "entry_failed",
-                entryID: String(entry.id)
-            ))
-
-            // Get repository info for comment
-            if let pr = try? await prRepo.get(id: entry.pullRequestID),
-               let repoInfo = try? parseRepositoryInfo(pr: pr) {
-                try? await githubGateway.postComment(
-                    owner: repoInfo.owner,
-                    repo: repoInfo.repo,
-                    number: pr.number,
-                    message: "❌ Failed to merge: \(error.localizedDescription)"
-                )
+            guard let pr = try? await prRepo.get(id: entry.pullRequestID),
+                  let repoInfo = try? parseRepositoryInfo(pr: pr),
+                  let config = try? await configRepo.get() else {
+                throw error
             }
 
+            let context = ProcessingContext(
+                pullRequest: pr,
+                repoInfo: repoInfo,
+                config: config,
+                entry: entry,
+                queue: queue,
+                queueRepo: queueRepo,
+                prRepo: prRepo
+            )
+
+            try await handleProcessingError(error: error, context: context, updatedEntry: &updatedEntry)
             throw error
         }
     }
 
+    private func executeChecksIfNeeded(
+        context: ProcessingContext,
+        updatedEntry: inout QueueEntry
+    ) async throws {
+        guard !context.config.checkConfigurations.isEmpty &&
+              context.config.checkConfigurations != "[]" else {
+            return
+        }
+
+        logger.info("Executing checks", metadata: ["prNumber": "\(context.pullRequest.number)"])
+        let checksPassed = try await checkExecutionService.executeChecks(
+            owner: context.repoInfo.owner,
+            repo: context.repoInfo.repo,
+            prNumber: context.pullRequest.number,
+            headSHA: context.pullRequest.headSHA,
+            checkConfigurations: context.config.checkConfigurations
+        )
+
+        guard checksPassed else {
+            logger.warning("Checks failed for PR", metadata: ["prNumber": "\(context.pullRequest.number)"])
+            updatedEntry.status = .failed
+            try await context.queueRepo.updateEntry(updatedEntry)
+            try await context.queueRepo.removeEntry(id: context.entry.id)
+
+            await WebSocketController.broadcastQueueEvent(QueueEvent(
+                queueID: String(context.queue.id),
+                action: "entry_failed",
+                entryID: String(context.entry.id)
+            ))
+
+            try? await githubGateway.postComment(
+                owner: context.repoInfo.owner,
+                repo: context.repoInfo.repo,
+                number: context.pullRequest.number,
+                message: "❌ Checks failed. Removed from merge queue."
+            )
+
+            throw ProcessingError.checksFailed
+        }
+    }
+
+    private func updateAndMergePR(context: ProcessingContext) async throws {
+        logger.info("Updating PR branch", metadata: ["prNumber": "\(context.pullRequest.number)"])
+        let updateResult = try await githubGateway.updatePullRequestBranch(
+            owner: context.repoInfo.owner,
+            repo: context.repoInfo.repo,
+            number: context.pullRequest.number
+        )
+
+        logger.info("Branch updated", metadata: [
+            "prNumber": "\(context.pullRequest.number)",
+            "message": .string(updateResult.message)
+        ])
+
+        try await Task.sleep(nanoseconds: 2_000_000_000)
+
+        logger.info("Merging pull request", metadata: ["prNumber": "\(context.pullRequest.number)"])
+        let mergeResult = try await githubGateway.mergePullRequest(
+            owner: context.repoInfo.owner,
+            repo: context.repoInfo.repo,
+            number: context.pullRequest.number,
+            options: MergeOptions(commitMessage: "Merged via IMQ", mergeMethod: "squash")
+        )
+
+        logger.info("Pull request merged successfully", metadata: [
+            "prNumber": "\(context.pullRequest.number)",
+            "sha": .string(mergeResult.sha)
+        ])
+    }
+
+    private func handleMergeSuccess(
+        context: ProcessingContext,
+        updatedEntry: inout QueueEntry
+    ) async throws {
+        updatedEntry.status = .completed
+        try await context.queueRepo.updateEntry(updatedEntry)
+        try await context.queueRepo.removeEntry(id: context.entry.id)
+
+        var mergedPR = context.pullRequest
+        mergedPR.status = .merged
+        try await context.prRepo.save(mergedPR)
+
+        await WebSocketController.broadcastQueueEvent(QueueEvent(
+            queueID: String(context.queue.id),
+            action: "entry_completed",
+            entryID: String(context.entry.id)
+        ))
+
+        try? await githubGateway.postComment(
+            owner: context.repoInfo.owner,
+            repo: context.repoInfo.repo,
+            number: context.pullRequest.number,
+            message: "✅ Successfully merged via IMQ!"
+        )
+    }
+
+    private func handleProcessingError(
+        error: Error,
+        context: ProcessingContext,
+        updatedEntry: inout QueueEntry
+    ) async throws {
+        logger.error("Failed to process entry", metadata: [
+            "entryID": "\(context.entry.id)",
+            "error": .string(error.localizedDescription)
+        ])
+
+        updatedEntry.status = .failed
+        try await context.queueRepo.updateEntry(updatedEntry)
+
+        await WebSocketController.broadcastQueueEvent(QueueEvent(
+            queueID: String(context.queue.id),
+            action: "entry_failed",
+            entryID: String(context.entry.id)
+        ))
+
+        if let pr = try? await context.prRepo.get(id: context.entry.pullRequestID),
+           let repoInfo = try? parseRepositoryInfo(pr: pr) {
+            try? await githubGateway.postComment(
+                owner: repoInfo.owner,
+                repo: repoInfo.repo,
+                number: pr.number,
+                message: "❌ Failed to merge: \(error.localizedDescription)"
+            )
+        }
+    }
 
     private func parseRepositoryInfo(pr: PullRequest) throws -> (owner: String, repo: String) {
         // Parse repository info from the PR
@@ -321,6 +344,18 @@ public actor QueueProcessingService {
 
         return (owner: String(components[0]), repo: String(components[1]))
     }
+}
+
+// MARK: - Processing Context
+
+struct ProcessingContext {
+    let pullRequest: PullRequest
+    let repoInfo: (owner: String, repo: String)
+    let config: SystemConfiguration
+    let entry: QueueEntry
+    let queue: Queue
+    let queueRepo: QueueRepository
+    let prRepo: PullRequestRepository
 }
 
 // MARK: - Error Types

@@ -84,34 +84,58 @@ struct WebhookController: RouteCollection {
             throw Abort(.internalServerError, reason: "Repositories not available")
         }
 
+        let context = PREventContext(
+            pr: pr,
+            payload: payload,
+            hasTriggerLabel: hasTriggerLabel,
+            triggerLabel: triggerLabel,
+            req: req,
+            queueRepo: queueRepo,
+            prRepo: prRepo
+        )
+
+        try await processPullRequestAction(action: action, context: context)
+    }
+
+    /// Process pull request action
+    private func processPullRequestAction(
+        action: String,
+        context: PREventContext
+    ) async throws {
         switch action {
-        case "labeled":
-            if hasTriggerLabel {
-                req.logger.info("PR labeled with trigger label, adding to queue", metadata: [
-                    "pr": "\(pr.number)",
-                    "label": "\(triggerLabel)"
-                ])
-                try await addPRToQueue(req: req, pr: pr, payload: payload, queueRepo: queueRepo, prRepo: prRepo)
-            }
-        case "unlabeled":
-            if !hasTriggerLabel {
-                req.logger.info("Trigger label removed, removing from queue", metadata: [
-                    "pr": "\(pr.number)",
-                    "label": "\(triggerLabel)"
-                ])
-                try await removePRFromQueue(req: req, prNumber: pr.number, payload: payload, queueRepo: queueRepo, prRepo: prRepo)
-            }
-        case "synchronize":
-            if hasTriggerLabel {
-                req.logger.info("PR updated, re-queuing", metadata: ["pr": "\(pr.number)"])
-                try await removePRFromQueue(req: req, prNumber: pr.number, payload: payload, queueRepo: queueRepo, prRepo: prRepo)
-                try await addPRToQueue(req: req, pr: pr, payload: payload, queueRepo: queueRepo, prRepo: prRepo)
-            }
+        case "labeled" where context.hasTriggerLabel:
+            context.req.logger.info("PR labeled with trigger label, adding to queue", metadata: [
+                "pr": "\(context.pr.number)",
+                "label": "\(context.triggerLabel)"
+            ])
+            try await addPRToQueue(req: context.req, pr: context.pr, payload: context.payload,
+                                   queueRepo: context.queueRepo, prRepo: context.prRepo)
+
+        case "unlabeled" where !context.hasTriggerLabel:
+            context.req.logger.info("Trigger label removed, removing from queue", metadata: [
+                "pr": "\(context.pr.number)",
+                "label": "\(context.triggerLabel)"
+            ])
+            try await removePRFromQueue(req: context.req, prNumber: context.pr.number,
+                                        payload: context.payload, queueRepo: context.queueRepo,
+                                        prRepo: context.prRepo)
+
+        case "synchronize" where context.hasTriggerLabel:
+            context.req.logger.info("PR updated, re-queuing", metadata: ["pr": "\(context.pr.number)"])
+            try await removePRFromQueue(req: context.req, prNumber: context.pr.number,
+                                        payload: context.payload, queueRepo: context.queueRepo,
+                                        prRepo: context.prRepo)
+            try await addPRToQueue(req: context.req, pr: context.pr, payload: context.payload,
+                                   queueRepo: context.queueRepo, prRepo: context.prRepo)
+
         case "closed":
-            req.logger.info("PR closed, removing from queue", metadata: ["pr": "\(pr.number)"])
-            try await removePRFromQueue(req: req, prNumber: pr.number, payload: payload, queueRepo: queueRepo, prRepo: prRepo)
+            context.req.logger.info("PR closed, removing from queue", metadata: ["pr": "\(context.pr.number)"])
+            try await removePRFromQueue(req: context.req, prNumber: context.pr.number,
+                                        payload: context.payload, queueRepo: context.queueRepo,
+                                        prRepo: context.prRepo)
+
         default:
-            req.logger.debug("Unhandled pull_request action", metadata: ["action": "\(action)"])
+            context.req.logger.debug("Unhandled pull_request action", metadata: ["action": "\(action)"])
         }
     }
 
@@ -310,4 +334,16 @@ struct GitHubWebhookPayload: Content {
             let name: String
         }
     }
+}
+
+// MARK: - PR Event Context
+
+struct PREventContext {
+    let pr: GitHubWebhookPayload.PullRequest
+    let payload: GitHubWebhookPayload
+    let hasTriggerLabel: Bool
+    let triggerLabel: String
+    let req: Request
+    let queueRepo: QueueRepository
+    let prRepo: PullRequestRepository
 }

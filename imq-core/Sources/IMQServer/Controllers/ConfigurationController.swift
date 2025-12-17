@@ -6,10 +6,6 @@ import IMQCore
 struct ConfigurationController: RouteCollection {
     let repository: ConfigurationRepository
 
-    init(repository: ConfigurationRepository) {
-        self.repository = repository
-    }
-
     func boot(routes: RoutesBuilder) throws {
         let config = routes.grouped("config")
 

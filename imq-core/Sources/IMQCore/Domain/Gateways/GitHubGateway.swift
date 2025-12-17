@@ -93,19 +93,30 @@ public protocol GitHubGateway: Sendable {
     ///   - owner: Repository owner (user or organization)
     ///   - repo: Repository name
     ///   - number: Pull request number
-    ///   - commitTitle: Title for the merge commit
-    ///   - commitMessage: Message for the merge commit
-    ///   - mergeMethod: Merge method (merge, squash, rebase)
+    ///   - options: Merge options
     /// - Returns: Merge result with SHA
     /// - Throws: GitHubAPIError if merge fails
     func mergePullRequest(
         owner: String,
         repo: String,
         number: Int,
-        commitTitle: String?,
-        commitMessage: String?,
-        mergeMethod: String
+        options: MergeOptions
     ) async throws -> MergeResult
+}
+
+// MARK: - Request Types
+
+/// Merge options for pull request
+public struct MergeOptions: Sendable {
+    public let commitTitle: String?
+    public let commitMessage: String?
+    public let mergeMethod: String
+
+    public init(commitTitle: String? = nil, commitMessage: String? = nil, mergeMethod: String = "squash") {
+        self.commitTitle = commitTitle
+        self.commitMessage = commitMessage
+        self.mergeMethod = mergeMethod
+    }
 }
 
 // MARK: - Response Types
