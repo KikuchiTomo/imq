@@ -1,66 +1,129 @@
 # IMQ - Immediate Merge Queue For GitHub
 
-A local GitHub merge queue system that helps you manage and test pull requests before merging.
+A lightweight, local GitHub merge queue system that automates pull request testing and merging through label-based triggers and configurable checks.
 
 ## Features
 
-- **Queue Management**: Automatically queue and process pull requests
-- **GitHub Integration**: Works with GitHub API and webhooks
-- **Web GUI**: User-friendly web interface for monitoring and management
-- **Real-time Updates**: WebSocket support for live status updates
-- **Flexible Deployment**: Run in foreground or as a daemon service
+- **Automated Queue Management**: Add PRs to the merge queue by applying a trigger label (default: `A-merge`)
+- **Configurable Checks**: Run GitHub Actions workflows, status checks, or mergeable validation before merging
+- **Real-time Monitoring**: Web-based GUI with live WebSocket updates for queue status
+- **Smart Processing**: Automatically updates PR branches and merges when checks pass
+- **Flexible Deployment**: Run in foreground or as a background daemon service
+- **Secure Webhook Integration**: HMAC-SHA256 signature verification for GitHub webhooks
+- **SQLite Database**: Lightweight, zero-configuration persistence with connection pooling
 
 ## Prerequisites
 
 - **Swift 5.9+**: [Install Swift](https://swift.org/download/)
 - **GitHub Personal Access Token**: [Create a token](https://github.com/settings/tokens) with `repo` and `workflow` scopes
-- **Webhook Proxy** (ngrok, smee.io, Cloudflare Tunnel, etc.): Required for receiving GitHub webhooks
+- **Webhook Proxy**: External service to forward GitHub webhooks to your local server (ngrok, smee.io, Cloudflare Tunnel, etc.)
 
-## Quick Start
+## Installation
 
-### 1. Configure the Environment
-
-Run the configuration script to set up your environment:
+### 1. Clone the Repository
 
 ```bash
-# Interactive mode (recommended for first-time setup)
-./configure.sh
-
-# Or use command-line arguments
-./configure.sh --github-token ghp_xxxxxxxxxxxx --mode webhook
+git clone https://github.com/yourusername/imq.git
+cd imq
 ```
 
-The configuration script will:
-- Create a `.env` file with your settings
-- Set up necessary directories
-- Optionally build the projects
-- Validate prerequisites
+### 2. Configure Environment
 
-### 2. Start All Services
+Run the interactive configuration script:
 
 ```bash
-# Run in foreground (Ctrl+C to stop)
+./configure.sh
+```
+
+Or use command-line arguments:
+
+```bash
+./configure.sh \
+  --github-token ghp_xxxxxxxxxxxx \
+  --repo owner/repository \
+  --webhook-proxy-url https://your-proxy-url.com \
+  --build
+```
+
+This creates a `.env` file with your settings and optionally builds the projects.
+
+### 3. Set Up Webhook Proxy
+
+IMQ requires an external proxy to receive GitHub webhooks. Choose one:
+
+#### Option A: ngrok (Recommended for Testing)
+
+```bash
+# Install ngrok
+brew install ngrok
+
+# Authenticate
+ngrok config add-authtoken YOUR_AUTH_TOKEN
+
+# Start tunnel
+ngrok http 8080
+
+# Copy the HTTPS URL (e.g., https://abc123.ngrok-free.app)
+# Add to .env: IMQ_WEBHOOK_PROXY_URL=https://abc123.ngrok-free.app
+```
+
+#### Option B: smee.io (Quick Testing)
+
+```bash
+# Get a channel at https://smee.io
+# Install smee-client
+npm install -g smee-client
+
+# Start forwarding
+smee --url https://smee.io/abc123 --target http://localhost:8080/webhook/github
+
+# Add to .env: IMQ_WEBHOOK_PROXY_URL=https://smee.io/abc123
+```
+
+#### Option C: Cloudflare Tunnel (Production)
+
+```bash
+# Install cloudflared
+brew install cloudflared
+
+# Authenticate
+cloudflared tunnel login
+
+# Create tunnel
+cloudflared tunnel create imq-webhook
+
+# Configure tunnel (see full instructions in Configuration section below)
+# Add to .env: IMQ_WEBHOOK_PROXY_URL=https://imq.your-domain.com
+```
+
+### 4. Configure GitHub Webhook
+
+Go to your repository settings on GitHub:
+
+1. Navigate to `https://github.com/OWNER/REPO/settings/hooks`
+2. Click "Add webhook"
+3. Set **Payload URL**: Your webhook proxy URL (e.g., `https://abc123.ngrok-free.app/`)
+4. Set **Content type**: `application/json`
+5. Set **Secret**: Copy from `IMQ_WEBHOOK_SECRET` in your `.env` file
+6. Select events: Choose "Send me everything" or specific events (pull_request, pull_request_review, check_suite, check_run, status)
+7. Click "Add webhook"
+
+## Usage
+
+### Start IMQ
+
+#### Foreground Mode
+
+```bash
 ./run.sh
 ```
 
-This will start:
-- **imq-core**: Backend API server (default: `http://localhost:8080`)
-- **imq-gui**: Web GUI (default: `http://localhost:8081`)
+This starts both the API server (port 8080) and web GUI (port 8081). Press Ctrl+C to stop.
 
-### 3. Access the GUI
-
-Open your browser and navigate to:
-
-```
-http://localhost:8081
-```
-
-## Running as a Daemon
-
-Use the service management script to run IMQ as a background daemon:
+#### Daemon Mode
 
 ```bash
-# Start daemon
+# Start as background service
 ./svc.sh start
 
 # Check status
@@ -72,40 +135,96 @@ Use the service management script to run IMQ as a background daemon:
 # Follow logs in real-time
 ./svc.sh logs -f
 
-# Restart all services
+# Restart services
 ./svc.sh restart
 
 # Stop daemon
 ./svc.sh stop
 ```
 
-## Configuration
+### Access the Web GUI
 
-All configuration is managed through environment variables in the `.env` file:
+Open your browser and navigate to:
 
-### GitHub Settings
-
-```bash
-# Required: Your GitHub Personal Access Token
-IMQ_GITHUB_TOKEN=ghp_xxxxxxxxxxxx
-
-# Required: GitHub Repository (OWNER/REPO)
-IMQ_GITHUB_REPO=octocat/hello-world
-
-# Optional: GitHub API URL (for GitHub Enterprise)
-IMQ_GITHUB_API_URL=https://api.github.com
+```
+http://localhost:8081
 ```
 
-**Note**: Set `IMQ_WEBHOOK_PROXY_URL` in `.env` to receive GitHub webhooks via your reverse proxy (ngrok, smee.io, Cloudflare Tunnel, etc.).
+The GUI displays:
+- Current queue status
+- Pending pull requests
+- Processing status in real-time
+- Check results
+
+### Using the Merge Queue
+
+1. **Add PR to Queue**: Apply the trigger label (default: `A-merge`) to a pull request
+2. **Automatic Processing**: IMQ will:
+   - Detect the label via webhook
+   - Add the PR to the queue
+   - Execute configured checks (if any)
+   - Update the PR branch with the latest base branch
+   - Merge the PR when checks pass
+   - Post status comments on the PR
+3. **Remove from Queue**: Remove the trigger label or close the PR
+
+### Configure Checks
+
+Access the configuration page in the web GUI or update via API to set up checks:
+
+```json
+{
+  "checkConfigurations": [
+    {
+      "name": "CI Tests",
+      "type": "github_actions",
+      "workflowName": "ci.yml",
+      "timeout": 600
+    },
+    {
+      "name": "Status Checks",
+      "type": "github_status"
+    },
+    {
+      "name": "Mergeable",
+      "type": "mergeable"
+    }
+  ]
+}
+```
+
+**Check Types:**
+- `github_actions`: Trigger and wait for a GitHub Actions workflow
+- `github_status`: Wait for status checks to pass
+- `mergeable`: Verify PR is in mergeable state
+
+## Configuration Reference
+
+All settings are configured via environment variables in the `.env` file.
+
+### Essential Settings
+
+```bash
+# GitHub credentials
+IMQ_GITHUB_TOKEN=ghp_xxxxxxxxxxxx
+IMQ_GITHUB_REPO=owner/repository
+
+# Webhook configuration
+IMQ_WEBHOOK_PROXY_URL=https://your-proxy-url.com
+IMQ_WEBHOOK_SECRET=your-webhook-secret
+
+# Trigger label
+IMQ_TRIGGER_LABEL=A-merge
+```
 
 ### Server Settings
 
 ```bash
-# API Server (imq-core)
+# API server
 IMQ_API_HOST=0.0.0.0
 IMQ_API_PORT=8080
 
-# GUI Server (imq-gui)
+# Web GUI
 IMQ_GUI_HOST=0.0.0.0
 IMQ_GUI_PORT=8081
 IMQ_GUI_API_URL=http://localhost:8080
@@ -118,7 +237,7 @@ IMQ_GUI_WS_URL=ws://localhost:8080/ws/events
 # SQLite database path (default: ~/.imq/imq.db)
 IMQ_DATABASE_PATH=/path/to/imq.db
 
-# Connection pool size
+# Connection pool size (default: 5)
 IMQ_DATABASE_POOL_SIZE=5
 ```
 
@@ -132,141 +251,28 @@ IMQ_LOG_LEVEL=info
 IMQ_LOG_FORMAT=pretty
 ```
 
-### Runtime Settings
+### Advanced Webhook Setup
 
-```bash
-# Environment: development, staging, production
-IMQ_ENVIRONMENT=development
+#### Cloudflare Tunnel (Production Setup)
 
-# Enable debug mode
-IMQ_DEBUG=false
-```
+For production deployments, Cloudflare Tunnel provides reliable, secure tunneling:
 
-## Webhook Setup
-
-IMQ requires an external reverse proxy service to receive GitHub webhooks. IMQ supports any proxy that can forward HTTPS requests to your local server.
-
-### Setting Up External Proxy
-
-In your `.env` file:
-
-```bash
-# Set external proxy URL
-IMQ_WEBHOOK_PROXY_URL=https://your-proxy-url.com
-
-# Generate and set webhook secret for security
-IMQ_WEBHOOK_SECRET=$(openssl rand -hex 32)
-
-# Set trigger label (optional, default: A-merge)
-IMQ_TRIGGER_LABEL=A-merge
-```
-
-When `IMQ_WEBHOOK_PROXY_URL` is set, `run.sh` will display instructions for configuring GitHub webhooks.
-
-### Option A: Using ngrok
-
-[ngrok](https://ngrok.com/) provides secure tunneling to localhost.
-
-1. Install ngrok:
+1. **Install cloudflared**:
    ```bash
-   # macOS
-   brew install ngrok
-
-   # Or download from https://ngrok.com/download
-   ```
-
-2. Sign up and get your auth token from https://dashboard.ngrok.com/get-started/your-authtoken
-
-3. Configure ngrok:
-   ```bash
-   ngrok config add-authtoken YOUR_AUTH_TOKEN
-   ```
-
-4. Start ngrok tunnel:
-   ```bash
-   ngrok http 8080
-   ```
-
-5. Copy the forwarding URL (e.g., `https://abc123.ngrok-free.app`) and add to `.env`:
-   ```bash
-   IMQ_WEBHOOK_PROXY_URL=https://abc123.ngrok-free.app
-   ```
-
-6. Start IMQ:
-   ```bash
-   ./run.sh
-   ```
-
-7. Configure GitHub webhook as shown in the terminal output:
-   - Go to `https://github.com/OWNER/REPO/settings/hooks`
-   - Add webhook with payload URL: `https://abc123.ngrok-free.app/`
-   - Content type: `application/json`
-   - Secret: (copy from `IMQ_WEBHOOK_SECRET` in `.env`)
-   - Events: Select "Send me everything" or specific events
-
-**ngrok Tips**:
-- Free tier: URLs change on restart, domain randomization
-- Paid tier: Static domains, no randomization, better for long-term use
-- Use `ngrok http 8080 --domain=your-static-domain.ngrok-free.app` with static domain
-
-### Option B: Using smee.io
-
-[smee.io](https://smee.io/) is a free webhook payload delivery service.
-
-1. Visit https://smee.io/ and click "Start a new channel"
-
-2. Copy the webhook proxy URL (e.g., `https://smee.io/abc123`)
-
-3. Install smee-client:
-   ```bash
-   npm install -g smee-client
-   ```
-
-4. Add proxy URL to `.env`:
-   ```bash
-   IMQ_WEBHOOK_PROXY_URL=https://smee.io/abc123
-   ```
-
-5. Start smee client to forward webhooks to IMQ:
-   ```bash
-   smee --url https://smee.io/abc123 --target http://localhost:8080/webhook/github
-   ```
-
-6. In a separate terminal, start IMQ:
-   ```bash
-   ./run.sh
-   ```
-
-7. Configure GitHub webhook:
-   - Payload URL: `https://smee.io/abc123/`
-   - Content type: `application/json`
-   - Events: Select "Send me everything"
-
-**Note**: smee.io is for testing only. Channels are public and expire after inactivity.
-
-### Option C: Using Cloudflare Tunnel
-
-[Cloudflare Tunnel](https://www.cloudflare.com/products/tunnel/) provides secure, production-grade tunneling.
-
-1. Install cloudflared:
-   ```bash
-   # macOS
    brew install cloudflared
-
-   # Or download from https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/install-and-setup/installation/
    ```
 
-2. Authenticate:
+2. **Authenticate**:
    ```bash
    cloudflared tunnel login
    ```
 
-3. Create a tunnel:
+3. **Create tunnel**:
    ```bash
    cloudflared tunnel create imq-webhook
    ```
 
-4. Create config file `~/.cloudflared/config.yml`:
+4. **Create config** (`~/.cloudflared/config.yml`):
    ```yaml
    tunnel: imq-webhook
    credentials-file: /path/to/credentials.json
@@ -277,79 +283,33 @@ When `IMQ_WEBHOOK_PROXY_URL` is set, `run.sh` will display instructions for conf
      - service: http_status:404
    ```
 
-5. Add DNS record:
+5. **Add DNS record**:
    ```bash
    cloudflared tunnel route dns imq-webhook imq.your-domain.com
    ```
 
-6. Add proxy URL to `.env`:
+6. **Update `.env`**:
    ```bash
    IMQ_WEBHOOK_PROXY_URL=https://imq.your-domain.com
    ```
 
-7. Start tunnel:
+7. **Start tunnel**:
    ```bash
    cloudflared tunnel run imq-webhook
    ```
 
-8. In a separate terminal, start IMQ:
-   ```bash
-   ./run.sh
-   ```
+#### Webhook Security
 
-9. Configure GitHub webhook:
-   - Payload URL: `https://imq.your-domain.com/`
-   - Content type: `application/json`
-   - Secret: (copy from `IMQ_WEBHOOK_SECRET` in `.env`)
-   - Events: Select "Send me everything"
+Always set a webhook secret for security:
 
-**Cloudflare Tunnel Benefits**:
-- Production-grade reliability
-- DDoS protection
-- Custom domain support
-- No exposed ports
-- Free for personal use
-
-### Webhook Security
-
-When using external proxies, always:
-
-1. **Set a webhook secret**:
-   ```bash
-   IMQ_WEBHOOK_SECRET=$(openssl rand -hex 32)
-   ```
-
-2. **Use the secret in GitHub webhook configuration**
-
-3. **Use HTTPS** for all webhook URLs (all proxy services provide HTTPS)
-
-4. **Limit webhook events** to only what you need (or use "Send me everything" for simplicity)
-
-## Project Structure
-
-```
-imq/
-├── configure.sh          # Configuration script
-├── run.sh               # Start all services
-├── svc.sh               # Daemon management script
-├── .env.example         # Environment template
-├── .env                 # Your configuration (git-ignored)
-├── imq-core/            # Backend service
-│   ├── Sources/
-│   │   ├── IMQCore/     # Core library
-│   │   ├── IMQCLI/      # CLI tool
-│   │   └── IMQServer/   # API server
-│   └── Package.swift
-├── imq-gui/             # Web GUI
-│   ├── Sources/
-│   │   ├── IMQGUILib/   # GUI library
-│   │   └── Run/         # Server executable
-│   ├── Resources/       # Web assets
-│   └── Package.swift
-└── logs/                # Log files (git-ignored)
+```bash
+# Generate a secure secret
+IMQ_WEBHOOK_SECRET=$(openssl rand -hex 32)
 ```
 
-## Scripts Reference
+Add this secret to your GitHub webhook configuration. IMQ verifies all incoming webhooks using HMAC-SHA256 signatures.
+
+## Command Reference
 
 ### configure.sh
 
@@ -359,54 +319,32 @@ Initial setup and configuration.
 ./configure.sh [OPTIONS]
 
 OPTIONS:
-  -t, --github-token TOKEN              GitHub Personal Access Token
-  -r, --repo OWNER/REPO                 GitHub repository (e.g., octocat/hello-world)
-  -p, --api-port PORT                   API server port (default: 8080)
-  -g, --gui-port PORT                   GUI server port (default: 8081)
-  -e, --environment ENV                 Environment (development|staging|production)
-  --webhook-proxy-url URL               External webhook proxy URL (e.g., https://abc.ngrok.io)
-  --webhook-secret SECRET               Webhook secret for security (auto-generated if not provided)
-  --trigger-label LABEL                 Trigger label for merge queue (default: A-merge)
-  -b, --build                           Build projects after configuration
-  -f, --force                           Force overwrite existing .env
-  -i, --interactive                     Interactive mode
-  -h, --help                            Show help
-
-EXAMPLES:
-  # Interactive mode (recommended)
-  ./configure.sh
-
-  # Basic setup
-  ./configure.sh -t ghp_xxxx -r owner/repo
-
-  # With external webhook proxy (ngrok, smee.io, etc.)
-  ./configure.sh -t ghp_xxxx -r owner/repo --webhook-proxy-url https://abc.ngrok.io
-
-  # With custom webhook secret
-  ./configure.sh -t ghp_xxxx -r owner/repo --webhook-secret $(openssl rand -hex 32)
+  -t, --github-token TOKEN       GitHub Personal Access Token
+  -r, --repo OWNER/REPO          GitHub repository
+  -p, --api-port PORT            API server port (default: 8080)
+  -g, --gui-port PORT            GUI server port (default: 8081)
+  --webhook-proxy-url URL        External webhook proxy URL
+  --webhook-secret SECRET        Webhook secret (auto-generated if not provided)
+  --trigger-label LABEL          Trigger label (default: A-merge)
+  -b, --build                    Build projects after configuration
+  -f, --force                    Force overwrite existing .env
+  -i, --interactive              Interactive mode (default)
+  -h, --help                     Show help
 ```
-
-**Note**: Set `--webhook-proxy-url` to configure your webhook proxy (ngrok, smee.io, Cloudflare Tunnel, etc.).
 
 ### run.sh
 
-Start all services in foreground.
+Start all services in foreground mode.
 
 ```bash
 ./run.sh
 
-# Services started:
-# - imq-core (API server)
-# - imq-gui (Web GUI)
-
-# Press Ctrl+C to stop all services
+# Press Ctrl+C to stop
 ```
-
-**Note**: When you run `./run.sh`, it will display webhook configuration instructions if `IMQ_WEBHOOK_PROXY_URL` is set, or remind you to configure it if not set.
 
 ### svc.sh
 
-Daemon service management.
+Manage IMQ as a background daemon.
 
 ```bash
 ./svc.sh {start|stop|restart|status|logs}
@@ -420,84 +358,94 @@ COMMANDS:
   logs -f    Follow logs in real-time
 ```
 
-## Development
-
-### Building Manually
-
-```bash
-# Build imq-core
-cd imq-core
-swift build
-
-# Build imq-gui
-cd imq-gui
-swift build
-```
-
-### Running Individual Services
-
-```bash
-# Run imq-core server
-cd imq-core
-swift run imq-server
-
-# Run imq-gui
-cd imq-gui
-swift run imq-gui
-
-# Run imq CLI
-cd imq-core
-swift run imq --help
-```
-
-### Running Tests
-
-```bash
-# Run imq-core tests
-cd imq-core
-swift test
-
-# Run imq-gui tests
-cd imq-gui
-swift test
-```
-
 ## Troubleshooting
 
-### Services won't start
+### Services Won't Start
 
-1. Check if ports are already in use:
+1. **Check if ports are in use**:
    ```bash
-   lsof -i :8080  # Check API port
-   lsof -i :8081  # Check GUI port
+   lsof -i :8080  # API port
+   lsof -i :8081  # GUI port
    ```
 
-2. Check logs:
+2. **Check logs**:
    ```bash
    ./svc.sh logs
+   # or
+   tail -f logs/imq-core.log
+   tail -f logs/imq-gui.log
    ```
 
-3. Verify configuration:
+3. **Verify configuration**:
    ```bash
    cat .env
    ```
 
-### Database issues
+### Webhooks Not Received
 
-1. Check database file permissions:
+1. **Verify webhook proxy is running** (ngrok, smee, cloudflared)
+2. **Check GitHub webhook delivery status** in repository settings
+3. **Verify webhook secret** matches between `.env` and GitHub
+4. **Check webhook URL** is correctly set in GitHub
+
+### Database Issues
+
+1. **Check file permissions**:
    ```bash
    ls -la ~/.imq/imq.db
    ```
 
-2. Reset database (WARNING: deletes all data):
+2. **Reset database** (WARNING: deletes all data):
    ```bash
    rm -f ~/.imq/imq.db
+   # Restart IMQ to recreate schema
+   ./svc.sh restart
    ```
+
+### PRs Not Processing
+
+1. **Verify trigger label** matches configuration (`IMQ_TRIGGER_LABEL`)
+2. **Check queue processing** in web GUI
+3. **Review logs** for processing errors
+4. **Verify GitHub token** has required permissions (`repo`, `workflow`)
 
 ## License
 
-See [LICENSE](LICENSE) file for details.
+MIT License
 
-## Contributing
+Copyright (c) 2025 IMQ Contributors
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+## Disclaimer
+
+This software is provided for automating GitHub merge queue workflows. Users are responsible for:
+
+- **Security**: Properly securing webhook secrets and GitHub tokens
+- **GitHub API Usage**: Complying with GitHub's API rate limits and terms of service
+- **Data Loss**: Maintaining backups of important data; the authors are not liable for any data loss
+- **Merge Operations**: Reviewing and testing merge operations; automated merging may have unintended consequences
+
+**Use at your own risk.** This software is designed for development and testing environments. For production use, thoroughly test in a controlled environment first.
+
+## Support
+
+- **Issues**: Report bugs or request features at [GitHub Issues](https://github.com/yourusername/imq/issues)
+- **Documentation**: See this README for complete usage instructions
+- **Community**: Contributions and feedback welcome
