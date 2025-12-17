@@ -278,6 +278,62 @@ public actor GitHubGatewayImpl: GitHubGateway {
         logger.info("Comment posted successfully")
     }
 
+    public func mergePullRequest(
+        owner: String,
+        repo: String,
+        number: Int,
+        commitTitle: String?,
+        commitMessage: String?,
+        mergeMethod: String
+    ) async throws -> MergeResult {
+        logger.info(
+            "Merging pull request",
+            metadata: [
+                "owner": .string(owner),
+                "repo": .string(repo),
+                "number": .stringConvertible(number),
+                "mergeMethod": .string(mergeMethod)
+            ]
+        )
+
+        let endpoint = GitHubAPIEndpoint.mergePullRequest(
+            owner: owner,
+            repo: repo,
+            number: number
+        )
+
+        let requestBody = MergePullRequestRequest(
+            commitTitle: commitTitle,
+            commitMessage: commitMessage,
+            mergeMethod: mergeMethod
+        )
+
+        do {
+            let data = try await apiClient.put(endpoint, body: requestBody)
+            let response = try JSONDecoder().decode(MergeResponse.self, from: data)
+
+            logger.info("Pull request merged successfully", metadata: ["sha": .string(response.sha)])
+
+            return MergeResult(
+                sha: response.sha,
+                merged: response.merged,
+                message: response.message
+            )
+        } catch let error as DecodingError {
+            logger.error(
+                "Failed to decode merge response",
+                metadata: ["error": .string(error.localizedDescription)]
+            )
+            throw GitHubAPIError.decodingError(error)
+        } catch {
+            logger.error(
+                "Failed to merge pull request",
+                metadata: ["error": .string(error.localizedDescription)]
+            )
+            throw error
+        }
+    }
+
     // MARK: - Private Helper Methods
 
     /// Get the latest workflow run for a given workflow and ref
@@ -383,4 +439,24 @@ private struct WorkflowDispatchRequest: Encodable {
 /// Comment request
 private struct CommentRequest: Encodable {
     let body: String
+}
+
+/// Merge pull request request
+private struct MergePullRequestRequest: Encodable {
+    let commitTitle: String?
+    let commitMessage: String?
+    let mergeMethod: String
+
+    enum CodingKeys: String, CodingKey {
+        case commitTitle = "commit_title"
+        case commitMessage = "commit_message"
+        case mergeMethod = "merge_method"
+    }
+}
+
+/// Merge pull request response
+private struct MergeResponse: Decodable {
+    let sha: String
+    let merged: Bool
+    let message: String
 }

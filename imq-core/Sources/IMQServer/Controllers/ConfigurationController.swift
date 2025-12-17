@@ -4,6 +4,11 @@ import IMQCore
 /// Configuration Controller
 /// Handles configuration-related HTTP requests
 struct ConfigurationController: RouteCollection {
+    let repository: ConfigurationRepository
+
+    init(repository: ConfigurationRepository) {
+        self.repository = repository
+    }
 
     func boot(routes: RoutesBuilder) throws {
         let config = routes.grouped("config")
@@ -14,35 +19,75 @@ struct ConfigurationController: RouteCollection {
     }
 
     /// GET /api/v1/config
-    /// Get current configuration
+    /// Get current configuration (merged with environment variables)
     func get(req: Request) async throws -> ConfigurationDTO {
-        // Read configuration from environment variables
+        let config = try await repository.get()
+
         return ConfigurationDTO(
-            triggerLabel: Environment.get("IMQ_TRIGGER_LABEL") ?? "A-merge",
-            githubMode: Environment.get("IMQ_GITHUB_MODE") ?? "webhook",
-            pollingInterval: Double(Environment.get("IMQ_POLLING_INTERVAL") ?? "60") ?? 60.0,
-            webhookSecret: Environment.get("IMQ_WEBHOOK_SECRET"),
-            checkConfigurations: [],
-            notificationTemplates: []
+            triggerLabel: config.triggerLabel,
+            webhookSecret: config.webhookSecret,
+            webhookProxyUrl: config.webhookProxyUrl,
+            checkConfigurations: parseJSONArray(config.checkConfigurations),
+            notificationTemplates: parseJSONArray(config.notificationTemplates)
         )
     }
 
     /// PUT /api/v1/config
     /// Update configuration
     func update(req: Request) async throws -> APIResponse<ConfigurationDTO> {
-        let config = try req.content.decode(ConfigurationDTO.self)
+        let dto = try req.content.decode(ConfigurationDTO.self)
 
-        // Note: This is a simplified implementation
-        // In production, you would save this to ConfigurationRepository
-        // and update the running system configuration
+        let config = SystemConfiguration(
+            triggerLabel: dto.triggerLabel,
+            webhookSecret: dto.webhookSecret, // Not saved, just passed through
+            webhookProxyUrl: dto.webhookProxyUrl, // Not saved, just passed through
+            checkConfigurations: serializeJSONArray(dto.checkConfigurations),
+            notificationTemplates: serializeJSONArray(dto.notificationTemplates),
+            updatedAt: Date()
+        )
 
-        return .success(config)
+        try await repository.save(config)
+
+        // Return updated config
+        let updated = try await repository.get()
+        return .success(ConfigurationDTO(
+            triggerLabel: updated.triggerLabel,
+            webhookSecret: updated.webhookSecret,
+            webhookProxyUrl: updated.webhookProxyUrl,
+            checkConfigurations: parseJSONArray(updated.checkConfigurations),
+            notificationTemplates: parseJSONArray(updated.notificationTemplates)
+        ))
     }
 
     /// POST /api/v1/config/reset
     /// Reset configuration to defaults
     func reset(req: Request) async throws -> APIResponse<String> {
-        // TODO: Implement with ConfigurationRepository
+        let defaultConfig = SystemConfiguration(
+            triggerLabel: "A-merge",
+            checkConfigurations: "[]",
+            notificationTemplates: "[]"
+        )
+
+        try await repository.save(defaultConfig)
+
         return .success("Configuration reset to defaults")
+    }
+
+    // MARK: - Helpers
+
+    private func parseJSONArray(_ json: String) -> [String] {
+        guard let data = json.data(using: .utf8),
+              let array = try? JSONDecoder().decode([String].self, from: data) else {
+            return []
+        }
+        return array
+    }
+
+    private func serializeJSONArray(_ array: [String]) -> String {
+        guard let data = try? JSONEncoder().encode(array),
+              let json = String(data: data, encoding: .utf8) else {
+            return "[]"
+        }
+        return json
     }
 }

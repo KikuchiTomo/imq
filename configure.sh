@@ -54,7 +54,6 @@ Setup IMQ environment by creating .env file and configuring settings.
 OPTIONS:
     -t, --github-token TOKEN              GitHub Personal Access Token
     -r, --repo OWNER/REPO                 GitHub repository (e.g., octocat/hello-world)
-    -m, --mode MODE                       GitHub integration mode (polling|webhook, default: webhook)
     -p, --api-port PORT                   API server port (default: 8080)
     -g, --gui-port PORT                   GUI server port (default: 8081)
     -e, --environment ENV                 Environment (development|staging|production, default: development)
@@ -71,7 +70,7 @@ EXAMPLES:
     $0
 
     # Non-interactive mode with arguments
-    $0 --github-token ghp_xxxxxxxxxxxx --repo owner/repo --mode webhook
+    $0 --github-token ghp_xxxxxxxxxxxx --repo owner/repo
 
     # With custom ports
     $0 -t ghp_xxxx -r owner/repo -p 9080 -g 9081
@@ -92,7 +91,6 @@ EOF
 # Parse command line arguments
 GITHUB_TOKEN=""
 GITHUB_REPO=""
-GITHUB_MODE="webhook"
 API_PORT="8080"
 GUI_PORT="8081"
 ENVIRONMENT="development"
@@ -116,10 +114,6 @@ while [[ $# -gt 0 ]]; do
             ;;
         -r|--repo)
             GITHUB_REPO="$2"
-            shift 2
-            ;;
-        -m|--mode)
-            GITHUB_MODE="$2"
             shift 2
             ;;
         -p|--api-port)
@@ -223,21 +217,6 @@ check_prerequisites() {
         exit 1
     fi
 
-    # Check if gh command is available
-    if ! command -v gh &> /dev/null; then
-        print_warning "GitHub CLI (gh) is not installed"
-        print_info "For webhook mode, you need GitHub CLI to forward webhooks"
-        print_info "Install it from: https://cli.github.com/"
-        echo ""
-        read -p "Continue anyway? [y/N]: " -n 1 -r
-        echo
-        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-            exit 1
-        fi
-    else
-        print_success "GitHub CLI (gh) is installed"
-    fi
-
     # Check if swift is available
     if ! command -v swift &> /dev/null; then
         print_error "Swift is not installed"
@@ -274,61 +253,41 @@ interactive_configuration() {
         fi
     fi
 
-    # GitHub Mode
+    # GitHub Repository
     echo ""
-    echo "GitHub Integration Mode:"
-    echo "  1) webhook (recommended) - Real-time webhook events"
-    echo "  2) polling - Polls GitHub API periodically"
-    read -p "Select mode [1]: " MODE_CHOICE
-    MODE_CHOICE=${MODE_CHOICE:-1}
-    if [ "$MODE_CHOICE" = "2" ]; then
-        GITHUB_MODE="polling"
-    else
-        GITHUB_MODE="webhook"
+    while [ -z "$GITHUB_REPO" ]; do
+        read -p "Enter your GitHub repository (OWNER/REPO): " GITHUB_REPO
+        if [ -z "$GITHUB_REPO" ]; then
+            print_warning "GitHub repository is required!"
+        elif [[ ! "$GITHUB_REPO" =~ ^[^/]+/[^/]+$ ]]; then
+            print_warning "Invalid repository format. Use OWNER/REPO (e.g., octocat/hello-world)"
+            GITHUB_REPO=""
+        fi
+    done
+
+    # Webhook proxy configuration
+    echo ""
+    echo "Webhook Proxy URL (required for receiving webhooks):"
+    echo "Examples:"
+    echo "  - ngrok: https://abc123.ngrok-free.app"
+    echo "  - smee.io: https://smee.io/abc123"
+    echo "  - Cloudflare Tunnel: https://imq.your-domain.com"
+    echo ""
+    read -p "Enter your webhook proxy URL (or leave empty to configure later): " WEBHOOK_PROXY_URL
+
+    # Webhook secret
+    echo ""
+    read -p "Generate webhook secret for security? [Y/n]: " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+        WEBHOOK_SECRET=$(openssl rand -hex 32 2>/dev/null || head -c 32 /dev/urandom | xxd -p -c 32)
+        print_success "Webhook secret generated"
     fi
 
-    # GitHub Repository (required for webhook mode)
-    if [ "$GITHUB_MODE" = "webhook" ]; then
-        echo ""
-        while [ -z "$GITHUB_REPO" ]; do
-            read -p "Enter your GitHub repository (OWNER/REPO): " GITHUB_REPO
-            if [ -z "$GITHUB_REPO" ]; then
-                print_warning "GitHub repository is required for webhook mode!"
-            elif [[ ! "$GITHUB_REPO" =~ ^[^/]+/[^/]+$ ]]; then
-                print_warning "Invalid repository format. Use OWNER/REPO (e.g., octocat/hello-world)"
-                GITHUB_REPO=""
-            fi
-        done
-
-        # Webhook proxy configuration
-        echo ""
-        echo "Webhook Delivery Method:"
-        echo "  1) Local development (uses gh webhook forward - for testing only)"
-        echo "  2) External proxy (ngrok, smee.io, Cloudflare Tunnel, etc.)"
-        read -p "Select method [1]: " PROXY_CHOICE
-        PROXY_CHOICE=${PROXY_CHOICE:-1}
-
-        if [ "$PROXY_CHOICE" = "2" ]; then
-            echo ""
-            echo "Enter your external proxy URL (or leave empty to configure later):"
-            echo "Examples: https://abc123.ngrok.io, https://smee.io/abc123"
-            read -p "Proxy URL: " WEBHOOK_PROXY_URL
-        fi
-
-        # Webhook secret
-        echo ""
-        read -p "Generate webhook secret for security? [Y/n]: " -n 1 -r
-        echo
-        if [[ ! $REPLY =~ ^[Nn]$ ]]; then
-            WEBHOOK_SECRET=$(openssl rand -hex 32 2>/dev/null || head -c 32 /dev/urandom | xxd -p -c 32)
-            print_success "Webhook secret generated"
-        fi
-
-        # Trigger label
-        echo ""
-        read -p "Trigger label for merge queue [A-merge]: " INPUT_TRIGGER_LABEL
-        TRIGGER_LABEL=${INPUT_TRIGGER_LABEL:-A-merge}
-    fi
+    # Trigger label
+    echo ""
+    read -p "Trigger label for merge queue [A-merge]: " INPUT_TRIGGER_LABEL
+    TRIGGER_LABEL=${INPUT_TRIGGER_LABEL:-A-merge}
 
     # API Port
     echo ""
@@ -371,17 +330,12 @@ validate_arguments() {
         usage
     fi
 
-    if [[ ! "$GITHUB_MODE" =~ ^(polling|webhook)$ ]]; then
-        print_error "Invalid mode: $GITHUB_MODE. Must be 'polling' or 'webhook'"
+    if [ -z "$GITHUB_REPO" ]; then
+        print_error "GitHub repository is required. Use -r or --repo"
         usage
     fi
 
-    if [ "$GITHUB_MODE" = "webhook" ] && [ -z "$GITHUB_REPO" ]; then
-        print_error "GitHub repository is required for webhook mode. Use -r or --repo"
-        usage
-    fi
-
-    if [ ! -z "$GITHUB_REPO" ] && [[ ! "$GITHUB_REPO" =~ ^[^/]+/[^/]+$ ]]; then
+    if [[ ! "$GITHUB_REPO" =~ ^[^/]+/[^/]+$ ]]; then
         print_error "Invalid repository format: $GITHUB_REPO. Must be OWNER/REPO"
         usage
     fi
@@ -407,8 +361,8 @@ validate_arguments() {
         usage
     fi
 
-    # Auto-generate webhook secret if not provided and in webhook mode
-    if [ "$GITHUB_MODE" = "webhook" ] && [ -z "$WEBHOOK_SECRET" ]; then
+    # Auto-generate webhook secret if not provided
+    if [ -z "$WEBHOOK_SECRET" ]; then
         WEBHOOK_SECRET=$(openssl rand -hex 32 2>/dev/null || head -c 32 /dev/urandom | xxd -p -c 32)
         print_info "Auto-generated webhook secret for security"
     fi
@@ -435,8 +389,6 @@ create_env_file() {
 IMQ_GITHUB_TOKEN=${GITHUB_TOKEN}
 IMQ_GITHUB_REPO=${GITHUB_REPO}
 IMQ_GITHUB_API_URL=https://api.github.com
-IMQ_GITHUB_MODE=${GITHUB_MODE}
-IMQ_POLLING_INTERVAL=60
 
 # ========================================
 # Webhook Configuration
@@ -538,15 +490,11 @@ show_summary() {
     echo ""
     print_info "Configuration Summary:"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "  GitHub Mode:     ${GITHUB_MODE}"
-    if [ ! -z "$GITHUB_REPO" ]; then
-        echo "  GitHub Repo:     ${GITHUB_REPO}"
-    fi
+    echo "  GitHub Repo:     ${GITHUB_REPO}"
     if [ ! -z "$WEBHOOK_PROXY_URL" ]; then
         echo "  Webhook Proxy:   ${WEBHOOK_PROXY_URL}"
-        echo "  Webhook Method:  External proxy (gh webhook forward disabled)"
-    elif [ "$GITHUB_MODE" = "webhook" ]; then
-        echo "  Webhook Method:  gh webhook forward (local testing)"
+    else
+        echo "  Webhook Proxy:   (not configured - set IMQ_WEBHOOK_PROXY_URL in .env)"
     fi
     if [ ! -z "$TRIGGER_LABEL" ]; then
         echo "  Trigger Label:   ${TRIGGER_LABEL}"
@@ -574,10 +522,9 @@ show_next_steps() {
     echo "  1. Start all services:"
     echo -e "     ${GREEN}./run.sh${NC}"
     if [ ! -z "$WEBHOOK_PROXY_URL" ]; then
-        echo "     (External webhook proxy configured: ${WEBHOOK_PROXY_URL})"
-        echo "     (Follow instructions in terminal to configure GitHub webhook)"
-    elif [ "$GITHUB_MODE" = "webhook" ] && [ ! -z "$GITHUB_REPO" ]; then
-        echo "     (This will automatically start webhook forwarding for ${GITHUB_REPO})"
+        echo "     (Webhook proxy configured: ${WEBHOOK_PROXY_URL})"
+    else
+        echo "     (Configure IMQ_WEBHOOK_PROXY_URL in .env to receive webhooks)"
     fi
     echo ""
     echo "  2. Or run as daemon:"

@@ -4,7 +4,7 @@ import Logging
 
 /// SQLite Connection Manager with pooling support
 /// Thread-safe connection management for concurrent access
-actor SQLiteConnectionManager {
+public actor SQLiteConnectionManager {
     private let databasePath: String
     private var connections: [Connection] = []
     private let maxConnections: Int
@@ -15,7 +15,7 @@ actor SQLiteConnectionManager {
     /// - Parameters:
     ///   - databasePath: Path to SQLite database file
     ///   - maxConnections: Maximum number of pooled connections (default: 5)
-    init(databasePath: String, maxConnections: Int = 5) throws {
+    public init(databasePath: String, maxConnections: Int = 5) throws {
         self.databasePath = databasePath
         self.maxConnections = maxConnections
         self.logger = Logger(label: "imq.database")
@@ -55,7 +55,7 @@ actor SQLiteConnectionManager {
     }
 
     /// Execute a query with automatic connection management
-    func withConnection<T>(_ operation: (Connection) async throws -> T) async throws -> T {
+    public func withConnection<T>(_ operation: (Connection) async throws -> T) async throws -> T {
         let (connection, index) = try await acquireConnection()
         defer {
             Task {
@@ -115,14 +115,14 @@ actor SQLiteConnectionManager {
 
 // MARK: - Database Errors
 
-enum DatabaseError: Error, LocalizedError {
+public enum DatabaseError: Error, LocalizedError {
     case schemaNotFound
     case connectionPoolExhausted
     case invalidQuery(String)
     case constraintViolation(String)
     case notFound(entityType: String, id: String)
 
-    var errorDescription: String? {
+    public var errorDescription: String? {
         switch self {
         case .schemaNotFound:
             return "Database schema file not found"

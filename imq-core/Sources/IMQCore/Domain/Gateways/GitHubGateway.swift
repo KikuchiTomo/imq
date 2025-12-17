@@ -87,6 +87,25 @@ protocol GitHubGateway: Sendable {
         number: Int,
         message: String
     ) async throws
+
+    /// Merge a pull request
+    /// - Parameters:
+    ///   - owner: Repository owner (user or organization)
+    ///   - repo: Repository name
+    ///   - number: Pull request number
+    ///   - commitTitle: Title for the merge commit
+    ///   - commitMessage: Message for the merge commit
+    ///   - mergeMethod: Merge method (merge, squash, rebase)
+    /// - Returns: Merge result with SHA
+    /// - Throws: GitHubAPIError if merge fails
+    func mergePullRequest(
+        owner: String,
+        repo: String,
+        number: Int,
+        commitTitle: String?,
+        commitMessage: String?,
+        mergeMethod: String
+    ) async throws -> MergeResult
 }
 
 // MARK: - Response Types
@@ -180,6 +199,24 @@ public struct WorkflowRun: Sendable, Codable {
         self.id = id
         self.status = status
         self.conclusion = conclusion
+    }
+}
+
+/// Merge result
+public struct MergeResult: Sendable, Codable {
+    /// SHA of the merge commit
+    public let sha: String
+
+    /// Whether the merge was successful
+    public let merged: Bool
+
+    /// Merge status message
+    public let message: String
+
+    public init(sha: String, merged: Bool, message: String) {
+        self.sha = sha
+        self.merged = merged
+        self.message = message
     }
 }
 

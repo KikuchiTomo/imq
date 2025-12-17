@@ -13,8 +13,8 @@ A local GitHub merge queue system that helps you manage and test pull requests b
 ## Prerequisites
 
 - **Swift 5.9+**: [Install Swift](https://swift.org/download/)
-- **GitHub CLI (gh)**: [Install GitHub CLI](https://cli.github.com/) (required for webhook mode)
 - **GitHub Personal Access Token**: [Create a token](https://github.com/settings/tokens) with `repo` and `workflow` scopes
+- **Webhook Proxy** (ngrok, smee.io, Cloudflare Tunnel, etc.): Required for receiving GitHub webhooks
 
 ## Quick Start
 
@@ -46,7 +46,6 @@ The configuration script will:
 This will start:
 - **imq-core**: Backend API server (default: `http://localhost:8080`)
 - **imq-gui**: Web GUI (default: `http://localhost:8081`)
-- **gh webhook forward**: Automatic webhook forwarding (if repository is configured)
 
 ### 3. Access the GUI
 
@@ -90,20 +89,14 @@ All configuration is managed through environment variables in the `.env` file:
 # Required: Your GitHub Personal Access Token
 IMQ_GITHUB_TOKEN=ghp_xxxxxxxxxxxx
 
-# Required for webhook mode: GitHub Repository (OWNER/REPO)
+# Required: GitHub Repository (OWNER/REPO)
 IMQ_GITHUB_REPO=octocat/hello-world
 
 # Optional: GitHub API URL (for GitHub Enterprise)
 IMQ_GITHUB_API_URL=https://api.github.com
-
-# Optional: Integration mode (webhook or polling)
-IMQ_GITHUB_MODE=webhook
-
-# Optional: Polling interval in seconds (for polling mode)
-IMQ_POLLING_INTERVAL=60
 ```
 
-**Note**: When `IMQ_GITHUB_REPO` is set and `IMQ_GITHUB_MODE=webhook`, `run.sh` will automatically start `gh webhook forward` for the specified repository. No need to run it manually!
+**Note**: Set `IMQ_WEBHOOK_PROXY_URL` in `.env` to receive GitHub webhooks via your reverse proxy (ngrok, smee.io, Cloudflare Tunnel, etc.).
 
 ### Server Settings
 
@@ -151,29 +144,9 @@ IMQ_DEBUG=false
 
 ## Webhook Setup
 
-IMQ supports two methods for receiving GitHub webhooks:
+IMQ requires an external reverse proxy service to receive GitHub webhooks. IMQ supports any proxy that can forward HTTPS requests to your local server.
 
-### 1. Local Development (Testing Only)
-
-For local testing, IMQ can automatically use `gh webhook forward` to receive webhooks. This is enabled by default when you configure a repository in `.env`:
-
-```bash
-IMQ_GITHUB_REPO=octocat/hello-world
-IMQ_GITHUB_MODE=webhook
-```
-
-When you run `./run.sh`, the webhook forwarder will start automatically. This requires:
-- GitHub CLI (`gh`) installed and authenticated
-- `gh-webhook` extension (auto-installed if needed)
-- Admin access to the repository
-
-**Note**: `gh webhook forward` is designed for testing only and not recommended for production use.
-
-### 2. External Reverse Proxy (Recommended for Production)
-
-For production or public deployments, use an external reverse proxy service. IMQ supports any proxy that can forward HTTPS requests to your local server.
-
-#### Setting Up External Proxy
+### Setting Up External Proxy
 
 In your `.env` file:
 
@@ -188,9 +161,9 @@ IMQ_WEBHOOK_SECRET=$(openssl rand -hex 32)
 IMQ_TRIGGER_LABEL=A-merge
 ```
 
-When `IMQ_WEBHOOK_PROXY_URL` is set, `run.sh` will display instructions for configuring GitHub webhooks instead of starting `gh webhook forward`.
+When `IMQ_WEBHOOK_PROXY_URL` is set, `run.sh` will display instructions for configuring GitHub webhooks.
 
-#### Option A: Using ngrok
+### Option A: Using ngrok
 
 [ngrok](https://ngrok.com/) provides secure tunneling to localhost.
 
@@ -226,7 +199,7 @@ When `IMQ_WEBHOOK_PROXY_URL` is set, `run.sh` will display instructions for conf
 
 7. Configure GitHub webhook as shown in the terminal output:
    - Go to `https://github.com/OWNER/REPO/settings/hooks`
-   - Add webhook with payload URL: `https://abc123.ngrok-free.app/webhook/github`
+   - Add webhook with payload URL: `https://abc123.ngrok-free.app/`
    - Content type: `application/json`
    - Secret: (copy from `IMQ_WEBHOOK_SECRET` in `.env`)
    - Events: Select "Send me everything" or specific events
@@ -236,7 +209,7 @@ When `IMQ_WEBHOOK_PROXY_URL` is set, `run.sh` will display instructions for conf
 - Paid tier: Static domains, no randomization, better for long-term use
 - Use `ngrok http 8080 --domain=your-static-domain.ngrok-free.app` with static domain
 
-#### Option B: Using smee.io
+### Option B: Using smee.io
 
 [smee.io](https://smee.io/) is a free webhook payload delivery service.
 
@@ -265,13 +238,13 @@ When `IMQ_WEBHOOK_PROXY_URL` is set, `run.sh` will display instructions for conf
    ```
 
 7. Configure GitHub webhook:
-   - Payload URL: `https://smee.io/abc123/webhook/github`
+   - Payload URL: `https://smee.io/abc123/`
    - Content type: `application/json`
    - Events: Select "Send me everything"
 
 **Note**: smee.io is for testing only. Channels are public and expire after inactivity.
 
-#### Option C: Using Cloudflare Tunnel
+### Option C: Using Cloudflare Tunnel
 
 [Cloudflare Tunnel](https://www.cloudflare.com/products/tunnel/) provides secure, production-grade tunneling.
 
@@ -325,7 +298,7 @@ When `IMQ_WEBHOOK_PROXY_URL` is set, `run.sh` will display instructions for conf
    ```
 
 9. Configure GitHub webhook:
-   - Payload URL: `https://imq.your-domain.com/webhook/github`
+   - Payload URL: `https://imq.your-domain.com/`
    - Content type: `application/json`
    - Secret: (copy from `IMQ_WEBHOOK_SECRET` in `.env`)
    - Events: Select "Send me everything"
@@ -388,7 +361,6 @@ Initial setup and configuration.
 OPTIONS:
   -t, --github-token TOKEN              GitHub Personal Access Token
   -r, --repo OWNER/REPO                 GitHub repository (e.g., octocat/hello-world)
-  -m, --mode MODE                       Integration mode (polling|webhook)
   -p, --api-port PORT                   API server port (default: 8080)
   -g, --gui-port PORT                   GUI server port (default: 8081)
   -e, --environment ENV                 Environment (development|staging|production)
@@ -404,20 +376,17 @@ EXAMPLES:
   # Interactive mode (recommended)
   ./configure.sh
 
-  # Basic webhook mode
-  ./configure.sh -t ghp_xxxx -r owner/repo -m webhook
+  # Basic setup
+  ./configure.sh -t ghp_xxxx -r owner/repo
 
   # With external webhook proxy (ngrok, smee.io, etc.)
   ./configure.sh -t ghp_xxxx -r owner/repo --webhook-proxy-url https://abc.ngrok.io
 
   # With custom webhook secret
   ./configure.sh -t ghp_xxxx -r owner/repo --webhook-secret $(openssl rand -hex 32)
-
-  # Polling mode
-  ./configure.sh -t ghp_xxxx -r owner/repo -m polling
 ```
 
-**Note**: When `--webhook-proxy-url` is set, IMQ will not use `gh webhook forward` and will instead expect webhooks from the external proxy.
+**Note**: Set `--webhook-proxy-url` to configure your webhook proxy (ngrok, smee.io, Cloudflare Tunnel, etc.).
 
 ### run.sh
 
@@ -429,12 +398,11 @@ Start all services in foreground.
 # Services started:
 # - imq-core (API server)
 # - imq-gui (Web GUI)
-# - gh webhook forward (automatically if IMQ_GITHUB_REPO is set)
 
 # Press Ctrl+C to stop all services
 ```
 
-**Note**: If `IMQ_GITHUB_REPO` is configured in `.env`, the webhook forwarder will start automatically. Otherwise, you'll see instructions on how to set it up.
+**Note**: When you run `./run.sh`, it will display webhook configuration instructions if `IMQ_WEBHOOK_PROXY_URL` is set, or remind you to configure it if not set.
 
 ### svc.sh
 
@@ -512,23 +480,6 @@ swift test
 3. Verify configuration:
    ```bash
    cat .env
-   ```
-
-### GitHub webhook forwarding fails
-
-1. Ensure GitHub CLI is installed:
-   ```bash
-   gh --version
-   ```
-
-2. Authenticate with GitHub:
-   ```bash
-   gh auth login
-   ```
-
-3. Verify repository access:
-   ```bash
-   gh repo view OWNER/REPO
    ```
 
 ### Database issues

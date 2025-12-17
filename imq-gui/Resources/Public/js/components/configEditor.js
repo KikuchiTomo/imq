@@ -8,42 +8,29 @@ function createConfigEditor(configStore) {
         error: null,
         message: null,
 
-        get config() { return this.store.config || {}; },
-        get loading() { return this.store.loading || false; },
+        get config() {
+            return this.store.config || {};
+        },
+        get loading() {
+            return this.store.loading || false;
+        },
 
         async init() {
             await this.store.init();
-
-            // Initialize config with defaults if needed
-            if (!this.config.checks) {
+            // Convert checkConfigurations to checks after loading
+            if (!this.config.checks && this.config.checkConfigurations) {
+                this.config.checks = this.config.checkConfigurations.map(name => ({
+                    name: name,
+                    type: 'githubActions',
+                    workflowName: '',
+                    jobName: '',
+                    scriptPath: '',
+                    arguments: '',
+                    timeout: null,
+                    failFast: 'true'
+                }));
+            } else if (!this.config.checks) {
                 this.config.checks = [];
-            }
-            if (!this.config.githubToken) {
-                this.config.githubToken = '';
-            }
-            if (!this.config.githubAPIURL) {
-                this.config.githubAPIURL = 'https://api.github.com';
-            }
-            if (!this.config.githubMode) {
-                this.config.githubMode = 'polling';
-            }
-            if (!this.config.pollingInterval) {
-                this.config.pollingInterval = 60;
-            }
-            if (!this.config.triggerLabel) {
-                this.config.triggerLabel = 'merge-queue';
-            }
-            if (!this.config.databasePath) {
-                this.config.databasePath = '~/.imq/imq.db';
-            }
-            if (!this.config.databasePoolSize) {
-                this.config.databasePoolSize = 5;
-            }
-            if (!this.config.logLevel) {
-                this.config.logLevel = 'info';
-            }
-            if (!this.config.logFormat) {
-                this.config.logFormat = 'pretty';
             }
         },
 
@@ -74,6 +61,10 @@ function createConfigEditor(configStore) {
             this.error = null;
             this.message = null;
             try {
+                // Convert checks (array of objects) to checkConfigurations (array of strings)
+                if (this.config.checks) {
+                    this.store.config.checkConfigurations = this.config.checks.map(check => check.name || '');
+                }
                 await this.store.save();
                 this.message = 'Configuration updated successfully!';
                 setTimeout(() => { this.message = null; }, 3000);

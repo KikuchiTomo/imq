@@ -7,12 +7,11 @@ import { AppEventType, WSEventType } from '../utils/eventTypes.js';
 function createConfigStore(apiClient, wsClient) {
     return {
         config: {
-            triggerLabel: 'merge-queue',
-            githubMode: 'polling',
-            pollingInterval: 60,
-            webhookSecret: '',
-            checkConfigurations: '{}',
-            notificationTemplates: '{}'
+            triggerLabel: 'A-merge',
+            webhookSecret: null,
+            webhookProxyUrl: null,
+            checkConfigurations: [],
+            notificationTemplates: []
         },
         loading: false,
         saving: false,

@@ -3,17 +3,33 @@ import IMQCore
 
 /// WebSocket Controller
 /// Handles WebSocket connections for real-time updates
+actor WebSocketManager {
+    private var clients: [UUID: WebSocket] = [:]
+
+    static let shared = WebSocketManager()
+
+    func addClient(_ id: UUID, _ ws: WebSocket) {
+        clients[id] = ws
+    }
+
+    func removeClient(_ id: UUID) {
+        clients.removeValue(forKey: id)
+    }
+
+    func broadcast(_ jsonString: String) {
+        for (_, ws) in clients {
+            ws.send(jsonString)
+        }
+    }
+}
+
 struct WebSocketController {
-
-    /// Connected WebSocket clients
-    private static var clients: [UUID: WebSocket] = [:]
-
     /// Handle new WebSocket connection
     static func handleConnection(_ req: Request, _ ws: WebSocket) async {
         let clientID = UUID()
 
         // Register client
-        clients[clientID] = ws
+        await WebSocketManager.shared.addClient(clientID, ws)
 
         req.logger.info("WebSocket client connected", metadata: ["clientID": "\(clientID)"])
 
@@ -43,8 +59,10 @@ struct WebSocketController {
 
         // Handle connection close
         ws.onClose.whenComplete { _ in
-            clients.removeValue(forKey: clientID)
-            req.logger.info("WebSocket client disconnected", metadata: ["clientID": "\(clientID)"])
+            Task {
+                await WebSocketManager.shared.removeClient(clientID)
+                req.logger.info("WebSocket client disconnected", metadata: ["clientID": "\(clientID)"])
+            }
         }
     }
 
@@ -72,33 +90,31 @@ struct WebSocketController {
     }
 
     /// Broadcast message to all connected clients
-    static func broadcast(_ message: WebSocketMessage) {
+    static func broadcast(_ message: WebSocketMessage) async {
         guard let jsonData = try? JSONEncoder().encode(message),
               let jsonString = String(data: jsonData, encoding: .utf8) else {
             return
         }
 
-        for (_, ws) in clients {
-            ws.send(jsonString)
-        }
+        await WebSocketManager.shared.broadcast(jsonString)
     }
 
     /// Broadcast queue event
-    static func broadcastQueueEvent(_ event: QueueEvent) {
+    static func broadcastQueueEvent(_ event: QueueEvent) async {
         let message = WebSocketMessage(type: "queue_event", data: event.toDictionary())
-        broadcast(message)
+        await broadcast(message)
     }
 
     /// Broadcast PR event
-    static func broadcastPREvent(_ event: PREvent) {
+    static func broadcastPREvent(_ event: PREvent) async {
         let message = WebSocketMessage(type: "pr_event", data: event.toDictionary())
-        broadcast(message)
+        await broadcast(message)
     }
 
     /// Broadcast check event
-    static func broadcastCheckEvent(_ event: CheckEvent) {
+    static func broadcastCheckEvent(_ event: CheckEvent) async {
         let message = WebSocketMessage(type: "check_event", data: event.toDictionary())
-        broadcast(message)
+        await broadcast(message)
     }
 }
 

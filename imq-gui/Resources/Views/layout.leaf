@@ -7,7 +7,6 @@
 
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="/css/app.css">
-    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <script>
         window.IMQ_CONFIG = {
             apiURL: "#(config.apiURL)",
@@ -16,7 +15,41 @@
             debugMode: #(config.debugMode)
         };
     </script>
-    <script type="module" src="/js/app.js" defer></script>
+    <script type="module">
+        import { APIClient } from '/js/clients/APIClient.js';
+        import { WebSocketClient } from '/js/clients/WebSocketClient.js';
+        import { QueueService } from '/js/services/QueueService.js';
+        import { createQueueStore } from '/js/stores/QueueStore.js';
+        import { createConfigStore } from '/js/stores/ConfigStore.js';
+        import { createDashboardComponent } from '/js/components/dashboard.js';
+        import { createConfigEditor } from '/js/components/configEditor.js';
+
+        const API_BASE_URL = window.IMQ_CONFIG?.apiURL || 'http://localhost:8080';
+        const WS_URL = window.IMQ_CONFIG?.wsURL || 'ws://localhost:8080/ws/events';
+
+        const apiClient = new APIClient(API_BASE_URL);
+        const wsClient = new WebSocketClient(WS_URL, {
+            reconnectInterval: 4000,
+            maxReconnectAttempts: 20
+        });
+
+        const queueService = new QueueService(apiClient);
+        const queueStore = createQueueStore(queueService, wsClient);
+        const configStore = createConfigStore(apiClient, wsClient);
+
+        window.queueStore = queueStore;
+        window.configStore = configStore;
+        window.wsClient = wsClient;
+        window.createDashboardComponent = createDashboardComponent;
+        window.createConfigEditor = createConfigEditor;
+    </script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" onload="
+        Alpine.store('queues', window.queueStore);
+        Alpine.store('config', window.configStore);
+        Alpine.data('dashboard', () => window.createDashboardComponent(window.queueStore, window.wsClient));
+        Alpine.data('configEditor', () => window.createConfigEditor(window.configStore));
+        setTimeout(() => window.wsClient.connect(), 500);
+    "></script>
 </head>
 <body class="min-h-screen">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
